@@ -1,16 +1,14 @@
 import { z } from 'zod'
 
-const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ObjectId')
-
-export const idParam = z.object({ id: objectId })
+export const idParam = z.object({ id: z.coerce.number().int().positive() })
 
 export const listDealersQuery = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
   q: z.string().optional(),
-  territory_id: objectId.optional(),
-  tier_id: objectId.optional(),
-  owner_staff_id: objectId.optional(),
+  territory_id: z.coerce.number().int().positive().optional(),
+  tier_id: z.coerce.number().int().positive().optional(),
+  owner_staff_id: z.coerce.number().int().positive().optional(),
   health: z.enum(['good', 'warning', 'critical']).optional(),
 })
 
@@ -20,10 +18,10 @@ export const updateDealerSchema = z.object({
   whatsapp_phone: z.string().optional(),
   city: z.string().optional(),
   state_normalized: z.string().optional(),
-  tier_id: objectId.optional(),
-  territory_id: objectId.nullable().optional(),
+  tier_id: z.coerce.number().int().positive().optional(),
+  territory_id: z.coerce.number().int().positive().nullable().optional(),
   territory_is_manual: z.boolean().optional(),
-  owner_staff_id: objectId.nullable().optional(),
+  owner_staff_id: z.coerce.number().int().positive().nullable().optional(),
 })
 
 export const addContactSchema = z.object({

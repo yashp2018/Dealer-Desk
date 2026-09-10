@@ -1,16 +1,7 @@
-import mongoose from 'mongoose'
-import { RequestModel, RequestFieldValueModel, RequestLineModel } from '../../models/request.model'
-import { TimelineEntryModel } from '../../models/timeline.model'
+import { Prisma } from '@prisma/client'
+import { prisma } from '../../config/database'
 
-const populate = [
-  { path: 'typeId' },
-  { path: 'ownerStaffId' },
-  { path: 'dealerId' },
-]
-
-function isValidObjectId(id: string): boolean {
-  return mongoose.Types.ObjectId.isValid(id)
-}
+const includeRelations = { type: true, owner: true, dealer: true } satisfies Prisma.RequestInclude
 
 export const requestRepository = {
   async findMany(params: {
@@ -19,71 +10,68 @@ export const requestRepository = {
     q?: string
     status?: string
     priority?: number
-    dealerId?: string
-    ownerStaffId?: string
-    typeId?: string
+    dealerId?: number
+    ownerStaffId?: number
+    typeId?: number
     startDate?: string
     endDate?: string
   }) {
-    const filter: Record<string, unknown> = {}
-    if (params.q) filter.$or = [{ title: { $regex: params.q, $options: 'i' } }, { refNo: { $regex: params.q, $options: 'i' } }]
-    if (params.status) filter.status = params.status
-    if (params.priority) filter.priority = params.priority
-    if (params.dealerId && isValidObjectId(params.dealerId)) filter.dealerId = new mongoose.Types.ObjectId(params.dealerId)
-    if (params.ownerStaffId && isValidObjectId(params.ownerStaffId)) filter.ownerStaffId = new mongoose.Types.ObjectId(params.ownerStaffId)
-    if (params.typeId && isValidObjectId(params.typeId)) filter.typeId = new mongoose.Types.ObjectId(params.typeId)
-    if (params.startDate || params.endDate) {
-      const dateFilter: Record<string, Date> = {}
-      if (params.startDate) dateFilter.$gte = new Date(params.startDate)
-      if (params.endDate) dateFilter.$lte = new Date(params.endDate)
-      filter.$or = [{ dueAt: dateFilter }, { scheduledAt: dateFilter }]
+    const dateFilter: Prisma.DateTimeFilter = {}
+    if (params.startDate) dateFilter.gte = new Date(params.startDate)
+    if (params.endDate) dateFilter.lte = new Date(params.endDate)
+
+    const where: Prisma.RequestWhereInput = {
+      ...(params.q ? { OR: [{ title: { contains: params.q } }, { refNo: { contains: params.q } }] } : {}),
+      ...(params.status ? { status: params.status } : {}),
+      ...(params.priority ? { priority: params.priority } : {}),
+      ...(params.dealerId ? { dealerId: params.dealerId } : {}),
+      ...(params.ownerStaffId ? { ownerStaffId: params.ownerStaffId } : {}),
+      ...(params.typeId ? { typeId: params.typeId } : {}),
+      ...(params.startDate || params.endDate
+        ? { OR: [{ dueAt: dateFilter }, { scheduledAt: dateFilter }] }
+        : {}),
     }
 
     const [requests, total] = await Promise.all([
-      RequestModel.find(filter).populate(populate).sort({ createdAt: -1 }).skip(params.skip).limit(params.take).lean(),
-      RequestModel.countDocuments(filter),
+      prisma.request.findMany({ where, include: includeRelations, orderBy: { createdAt: 'desc' }, skip: params.skip, take: params.take }),
+      prisma.request.count({ where }),
     ])
     return { requests, total }
   },
 
-  findById(id: string) {
-    if (!isValidObjectId(id)) return Promise.resolve(null)
-    return RequestModel.findById(id).populate(populate).lean()
+  findById(id: number) {
+    return prisma.request.findUnique({ where: { id }, include: includeRelations })
   },
 
   findByClientUuid(clientUuid: string) {
-    return RequestModel.findOne({ clientUuid }).populate(populate).lean()
+    return prisma.request.findUnique({ where: { clientUuid }, include: includeRelations })
   },
 
-  fields(requestId: string) {
-    if (!isValidObjectId(requestId)) return Promise.resolve([])
-    return RequestFieldValueModel.find({ requestId: new mongoose.Types.ObjectId(requestId) }).lean()
+  fields(requestId: number) {
+    return prisma.requestFieldValue.findMany({ where: { requestId } })
   },
 
-  async upsertFields(requestId: string, fields: Record<string, string>) {
-    if (!isValidObjectId(requestId)) return
-    const rid = new mongoose.Types.ObjectId(requestId)
+  async upsertFields(requestId: number, fields: Record<string, string>) {
     await Promise.all(
       Object.entries(fields).map(([key, value]) =>
-        RequestFieldValueModel.findOneAndUpdate(
-          { requestId: rid, key },
-          { value },
-          { upsert: true, new: true },
-        ),
+        prisma.requestFieldValue.upsert({
+          where: { requestId_key: { requestId, key } },
+          create: { requestId, key, value },
+          update: { value },
+        }),
       ),
     )
   },
 
-  lines(requestId: string) {
-    if (!isValidObjectId(requestId)) return Promise.resolve([])
-    return RequestLineModel.find({ requestId: new mongoose.Types.ObjectId(requestId) }).lean()
+  lines(requestId: number) {
+    return prisma.requestLine.findMany({ where: { requestId } })
   },
 
-  timeline(requestId: string) {
-    if (!isValidObjectId(requestId)) return Promise.resolve([])
-    return TimelineEntryModel.find({ entityType: 'request', entityId: new mongoose.Types.ObjectId(requestId) })
-      .populate('actorStaffId')
-      .sort({ createdAt: -1 })
-      .lean()
+  timeline(requestId: number) {
+    return prisma.timelineEntry.findMany({
+      where: { entityType: 'request', entityId: requestId },
+      include: { actor: true },
+      orderBy: { createdAt: 'desc' },
+    })
   },
 }

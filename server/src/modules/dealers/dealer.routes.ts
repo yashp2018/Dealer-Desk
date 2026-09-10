@@ -4,7 +4,7 @@ import { ok, paginated, created } from '../../common/utils/response'
 import { parsePagination } from '../../common/utils/pagination'
 import { authenticate } from '../../common/middleware/authenticate'
 import { requirePermission } from '../../common/middleware/authorize'
-import { requireInternal, requireDealerOwnership } from '../../common/middleware/dealerAuth'
+import { requireInternal } from '../../common/middleware/dealerAuth'
 import { validate } from '../../common/middleware/validate'
 import { dealerService } from './dealer.service'
 import { toDealerDto } from './dealer.mapper'
@@ -18,47 +18,47 @@ const dealerController = {
       skip,
       take: limit,
       q: q.q as string | undefined,
-      territoryId: q.territory_id as string | undefined,
-      tierId: q.tier_id as string | undefined,
-      ownerStaffId: q.owner_staff_id as string | undefined,
+      territoryId: q.territory_id ? Number(q.territory_id) : undefined,
+      tierId: q.tier_id ? Number(q.tier_id) : undefined,
+      ownerStaffId: q.owner_staff_id ? Number(q.owner_staff_id) : undefined,
       health: q.health as string | undefined,
     })
     paginated(res, dealers, { page, limit, total })
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {
-    const dealer = await dealerService.getOrThrow(req.params.id)
+    const dealer = await dealerService.getOrThrow(Number(req.params.id))
     ok(res, toDealerDto(dealer))
   }),
 
   threeSixty: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await dealerService.threeSixty(req.params.id))
+    ok(res, await dealerService.threeSixty(Number(req.params.id)))
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const result = await dealerService.update(req.params.id, req.body, req.staff!.id)
+    const result = await dealerService.update(Number(req.params.id), req.body, req.staff!.id)
     ok(res, result)
   }),
 
   contacts: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await dealerService.contacts(req.params.id))
+    ok(res, await dealerService.contacts(Number(req.params.id)))
   }),
 
   addContact: asyncHandler(async (req: Request, res: Response) => {
-    const contact = await dealerService.addContact(req.params.id, req.body, req.staff!.id)
+    const contact = await dealerService.addContact(Number(req.params.id), req.body, req.staff!.id)
     created(res, contact)
   }),
 
   requests: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await dealerService.requests(req.params.id))
+    ok(res, await dealerService.requests(Number(req.params.id)))
   }),
 
   visits: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await dealerService.visits(req.params.id))
+    ok(res, await dealerService.visits(Number(req.params.id)))
   }),
 
   timeline: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await dealerService.timeline(req.params.id))
+    ok(res, await dealerService.timeline(Number(req.params.id)))
   }),
 
   // ── Dealer Portal endpoints ──────────────────────────────────────────────────

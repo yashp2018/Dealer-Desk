@@ -1,27 +1,23 @@
-import mongoose from 'mongoose'
-import { IDealer, IDealerContact } from '../../models/dealer.model'
-import { ITier } from '../../models/master.model'
+import { Dealer, DealerContact, Tier, Territory } from '@prisma/client'
 
-export type DealerWithRelations = Omit<IDealer, 'tierId' | 'territoryId'> & {
-  tierId: ITier | mongoose.Types.ObjectId
-  territoryId: { name: string } | mongoose.Types.ObjectId
+export type DealerWithRelations = Dealer & {
+  tier: Tier
+  territory: Territory
   _openRequests: number
   _overdueRequests: number
 }
 
 export function toDealerDto(d: DealerWithRelations) {
-  const tier = d.tierId as ITier
-  const territory = d.territoryId as { name: string }
   return {
-    id: String(d._id),
+    id: d.id,
     code: d.code,
     name: d.name,
     display_name: d.displayName,
-    tier_id: String(tier._id ?? d.tierId),
-    tier_name: tier.name ?? '',
-    tier_color: tier.color ?? '#6b7280',
-    territory_id: String((territory as { _id?: unknown })._id ?? d.territoryId),
-    territory_name: territory.name ?? '',
+    tier_id: d.tierId,
+    tier_name: d.tier.name,
+    tier_color: d.tier.color,
+    territory_id: d.territoryId,
+    territory_name: d.territory.name,
     city: d.city,
     state_normalized: d.stateNormalized,
     health: d.health,
@@ -31,8 +27,8 @@ export function toDealerDto(d: DealerWithRelations) {
     last_contact_at: d.lastContactAt ? d.lastContactAt.toISOString() : null,
     phone_primary: d.phonePrimary,
     whatsapp_phone: d.whatsappPhone,
-    owner_staff_id: d.ownerStaffId ? String(d.ownerStaffId) : null,
-    client_id: d.clientId ?? null,
+    owner_staff_id: d.ownerStaffId,
+    client_id: d.clientId,
     territory_is_manual: d.territoryIsManual,
   }
 }
@@ -40,7 +36,7 @@ export function toDealerDto(d: DealerWithRelations) {
 /** Safe dealer info for dealer portal — no internal fields. */
 export function toDealerPortalDto(d: DealerWithRelations) {
   return {
-    id: String(d._id),
+    id: d.id,
     code: d.code,
     name: d.name,
     display_name: d.displayName,
@@ -48,14 +44,14 @@ export function toDealerPortalDto(d: DealerWithRelations) {
     state_normalized: d.stateNormalized,
     phone_primary: d.phonePrimary,
     whatsapp_phone: d.whatsappPhone,
-    tier_name: (d.tierId as ITier).name ?? '',
-    territory_name: (d.territoryId as { name: string }).name ?? '',
+    tier_name: d.tier.name,
+    territory_name: d.territory.name,
   }
 }
 
-export function toDealerContactDto(c: IDealerContact) {
+export function toDealerContactDto(c: DealerContact) {
   return {
-    id: String(c._id),
+    id: c.id,
     name: c.name,
     role_label: c.roleLabel,
     phone: c.phone,

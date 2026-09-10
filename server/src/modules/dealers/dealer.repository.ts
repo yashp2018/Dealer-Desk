@@ -1,38 +1,33 @@
-import mongoose from 'mongoose'
-import { DealerModel, DealerContactModel } from '../../models/dealer.model'
-import { RequestModel } from '../../models/request.model'
-import { VisitModel } from '../../models/visit.model'
-import { TimelineEntryModel } from '../../models/timeline.model'
+import { Prisma } from '@prisma/client'
+import { prisma } from '../../config/database'
 
 const OPEN_STATUSES_NOT_IN = ['done', 'cancelled']
 
-function isValidObjectId(id: string): boolean {
-  return mongoose.Types.ObjectId.isValid(id)
-}
-
-async function withRequestCounts<T extends { _id: mongoose.Types.ObjectId }>(dealers: T[]) {
+async function withRequestCounts<T extends { id: number }>(dealers: T[]) {
   if (dealers.length === 0) return []
-  const ids = dealers.map((d) => d._id)
+  const ids = dealers.map((d) => d.id)
   const now = new Date()
 
   const [openCounts, overdueCounts] = await Promise.all([
-    RequestModel.aggregate([
-      { $match: { dealerId: { $in: ids }, status: { $nin: OPEN_STATUSES_NOT_IN } } },
-      { $group: { _id: '$dealerId', count: { $sum: 1 } } },
-    ]),
-    RequestModel.aggregate([
-      { $match: { dealerId: { $in: ids }, status: { $nin: OPEN_STATUSES_NOT_IN }, dueAt: { $lt: now } } },
-      { $group: { _id: '$dealerId', count: { $sum: 1 } } },
-    ]),
+    prisma.request.groupBy({
+      by: ['dealerId'],
+      where: { dealerId: { in: ids }, status: { notIn: OPEN_STATUSES_NOT_IN } },
+      _count: { _all: true },
+    }),
+    prisma.request.groupBy({
+      by: ['dealerId'],
+      where: { dealerId: { in: ids }, status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { lt: now } },
+      _count: { _all: true },
+    }),
   ])
 
-  const openMap = new Map(openCounts.map((c: { _id: mongoose.Types.ObjectId; count: number }) => [String(c._id), c.count]))
-  const overdueMap = new Map(overdueCounts.map((c: { _id: mongoose.Types.ObjectId; count: number }) => [String(c._id), c.count]))
+  const openMap = new Map(openCounts.map((c) => [c.dealerId, c._count._all]))
+  const overdueMap = new Map(overdueCounts.map((c) => [c.dealerId, c._count._all]))
 
   return dealers.map((d) => ({
     ...d,
-    _openRequests: openMap.get(String(d._id)) ?? 0,
-    _overdueRequests: overdueMap.get(String(d._id)) ?? 0,
+    _openRequests: openMap.get(d.id) ?? 0,
+    _overdueRequests: overdueMap.get(d.id) ?? 0,
   }))
 }
 
@@ -41,105 +36,100 @@ export const dealerRepository = {
     skip: number
     take: number
     q?: string
-    territoryId?: string
-    tierId?: string
-    ownerStaffId?: string
+    territoryId?: number
+    tierId?: number
+    ownerStaffId?: number
     health?: string
   }) {
-    const filter: Record<string, unknown> = {}
-    if (params.q) {
-      filter.$or = [
-        { name: { $regex: params.q, $options: 'i' } },
-        { code: { $regex: params.q, $options: 'i' } },
-        { city: { $regex: params.q, $options: 'i' } },
-      ]
+    const where: Prisma.DealerWhereInput = {
+      ...(params.q
+        ? {
+            OR: [
+              { name: { contains: params.q } },
+              { code: { contains: params.q } },
+              { city: { contains: params.q } },
+            ],
+          }
+        : {}),
+      ...(params.territoryId ? { territoryId: params.territoryId } : {}),
+      ...(params.tierId ? { tierId: params.tierId } : {}),
+      ...(params.ownerStaffId ? { ownerStaffId: params.ownerStaffId } : {}),
+      ...(params.health ? { health: params.health } : {}),
     }
-    if (params.territoryId && isValidObjectId(params.territoryId)) filter.territoryId = new mongoose.Types.ObjectId(params.territoryId)
-    if (params.tierId && isValidObjectId(params.tierId)) filter.tierId = new mongoose.Types.ObjectId(params.tierId)
-    if (params.ownerStaffId && isValidObjectId(params.ownerStaffId)) filter.ownerStaffId = new mongoose.Types.ObjectId(params.ownerStaffId)
-    if (params.health) filter.health = params.health
 
     const [dealers, total] = await Promise.all([
-      DealerModel.find(filter)
-        .populate('tierId')
-        .populate('territoryId')
-        .sort({ name: 1 })
-        .skip(params.skip)
-        .limit(params.take)
-        .lean(),
-      DealerModel.countDocuments(filter),
+      prisma.dealer.findMany({
+        where,
+        include: { tier: true, territory: true },
+        orderBy: { name: 'asc' },
+        skip: params.skip,
+        take: params.take,
+      }),
+      prisma.dealer.count({ where }),
     ])
 
-    return { dealers: await withRequestCounts(dealers as (typeof dealers[0] & { _id: mongoose.Types.ObjectId })[]), total }
+    return { dealers: await withRequestCounts(dealers), total }
   },
 
-  async findById(id: string) {
-    if (!isValidObjectId(id)) return null
-    const dealer = await DealerModel.findById(id).populate('tierId').populate('territoryId').lean()
+  async findById(id: number) {
+    const dealer = await prisma.dealer.findUnique({ where: { id }, include: { tier: true, territory: true } })
     if (!dealer) return null
-    const [withCounts] = await withRequestCounts([dealer as typeof dealer & { _id: mongoose.Types.ObjectId }])
+    const [withCounts] = await withRequestCounts([dealer])
     return withCounts
   },
 
-  async update(id: string, data: Record<string, unknown>) {
-    if (!isValidObjectId(id)) return null
-    return DealerModel.findByIdAndUpdate(id, data, { new: true }).populate('tierId').populate('territoryId').lean()
+  update(id: number, data: Prisma.DealerUpdateInput) {
+    return prisma.dealer.update({ where: { id }, data, include: { tier: true, territory: true } })
   },
 
-  contacts(dealerId: string) {
-    if (!isValidObjectId(dealerId)) return Promise.resolve([])
-    return DealerContactModel.find({ dealerId: new mongoose.Types.ObjectId(dealerId), isActive: true })
-      .sort({ isPrimary: -1, name: 1 })
-      .lean()
-  },
-
-  async addContact(dealerId: string, data: { name: string; roleLabel?: string; phone?: string; email?: string; isPrimary?: boolean }) {
-    if (!isValidObjectId(dealerId)) throw new Error('Invalid dealerId')
-    const did = new mongoose.Types.ObjectId(dealerId)
-    if (data.isPrimary) {
-      await DealerContactModel.updateMany({ dealerId: did, isPrimary: true }, { isPrimary: false })
-    }
-    return DealerContactModel.create({
-      dealerId: did,
-      name: data.name,
-      roleLabel: data.roleLabel ?? '',
-      phone: data.phone ?? '',
-      email: data.email ?? '',
-      isPrimary: data.isPrimary ?? false,
+  contacts(dealerId: number) {
+    return prisma.dealerContact.findMany({
+      where: { dealerId, isActive: true },
+      orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
     })
   },
 
-  deactivateContact(dealerId: string, contactId: string) {
-    if (!isValidObjectId(dealerId) || !isValidObjectId(contactId)) return Promise.resolve(null)
-    return DealerContactModel.findOneAndUpdate(
-      { _id: new mongoose.Types.ObjectId(contactId), dealerId: new mongoose.Types.ObjectId(dealerId) },
-      { isActive: false },
-    )
+  async addContact(dealerId: number, data: { name: string; roleLabel?: string; phone?: string; email?: string; isPrimary?: boolean }) {
+    if (data.isPrimary) {
+      await prisma.dealerContact.updateMany({ where: { dealerId, isPrimary: true }, data: { isPrimary: false } })
+    }
+    return prisma.dealerContact.create({
+      data: {
+        dealerId,
+        name: data.name,
+        roleLabel: data.roleLabel ?? '',
+        phone: data.phone ?? '',
+        email: data.email ?? '',
+        isPrimary: data.isPrimary ?? false,
+      },
+    })
   },
 
-  requests(dealerId: string) {
-    if (!isValidObjectId(dealerId)) return Promise.resolve([])
-    return RequestModel.find({ dealerId: new mongoose.Types.ObjectId(dealerId) })
-      .populate('typeId')
-      .populate('ownerStaffId')
-      .sort({ createdAt: -1 })
-      .lean()
+  deactivateContact(dealerId: number, contactId: number) {
+    return prisma.dealerContact.updateMany({ where: { id: contactId, dealerId }, data: { isActive: false } })
   },
 
-  visits(dealerId: string) {
-    if (!isValidObjectId(dealerId)) return Promise.resolve([])
-    return VisitModel.find({ dealerId: new mongoose.Types.ObjectId(dealerId) })
-      .populate('visitTypeId')
-      .populate('ownerStaffId')
-      .sort({ scheduledAt: -1 })
-      .lean()
+  requests(dealerId: number) {
+    return prisma.request.findMany({
+      where: { dealerId },
+      include: { type: true, owner: true, dealer: true },
+      orderBy: { createdAt: 'desc' },
+    })
   },
 
-  timeline(dealerId: string) {
-    if (!isValidObjectId(dealerId)) return Promise.resolve([])
-    return TimelineEntryModel.find({ entityType: 'dealer', entityId: new mongoose.Types.ObjectId(dealerId) })
-      .populate('actorStaffId')
-      .sort({ createdAt: -1 })
-      .lean()
+  visits(dealerId: number) {
+    return prisma.visit.findMany({
+      where: { dealerId },
+      include: { visitType: true, owner: true, dealer: true, prospect: true },
+      orderBy: { scheduledAt: 'desc' },
+    })
+  },
+
+  timeline(dealerId: number) {
+    return prisma.timelineEntry.findMany({
+      where: { entityType: 'dealer', entityId: dealerId },
+      include: { actor: true },
+      orderBy: { createdAt: 'desc' },
+    })
   },
 }
