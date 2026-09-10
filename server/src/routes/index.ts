@@ -11,6 +11,8 @@ import { dashboardRouter } from '../modules/dashboard/dashboard.routes'
 import { syncRouter } from '../modules/sync/sync.routes'
 import { searchRouter } from '../modules/search/search.routes'
 import { setupRouter } from '../modules/staff/setup.routes'
+import { serviceRouter } from '../modules/services/service.routes'
+import { providerRouter } from '../modules/providers/provider.routes'
 
 export const apiRouter = Router()
 
@@ -35,6 +37,8 @@ apiRouter.use('/notifications', notificationRouter)
 apiRouter.use('/search', searchRouter)
 apiRouter.use('/sync', syncRouter)
 apiRouter.use('/setup', setupRouter)
+apiRouter.use('/services', serviceRouter)
+apiRouter.use('/providers', providerRouter)
 
 // My Day / My Week / Queue / Dashboard are top-level in the frontend contract
 // (src/api/myDay.ts calls '/my-day', '/queue', '/dashboard' directly), so this

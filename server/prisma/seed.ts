@@ -14,6 +14,8 @@ const PERMISSIONS = [
   'prospects.view_own', 'prospects.view_all', 'prospects.create', 'prospects.edit', 'prospects.convert',
   'requests.view_own', 'requests.view_all', 'requests.create', 'requests.edit', 'requests.assign', 'requests.push',
   'visits.view_own', 'visits.view_all', 'visits.create', 'visits.edit',
+  'services.view_all', 'services.create', 'services.edit', 'services.delete',
+  'providers.view_all', 'providers.create', 'providers.edit', 'providers.delete',
   'users.view_all', 'users.manage',
 ]
 
@@ -35,7 +37,9 @@ async function main() {
     data: permissionRecords.map((p) => ({ roleId: adminRole.id, permissionId: p.id })),
   })
 
-  const ownPermissions = permissionRecords.filter((p) => /view_own|create|edit$/.test(p.key))
+  const ownPermissions = permissionRecords.filter(
+    (p) => /view_own|create|edit$/.test(p.key) || /^(services|providers)\.view_all$/.test(p.key),
+  )
   await prisma.rolePermission.deleteMany({ where: { roleId: staffRole.id } })
   await prisma.rolePermission.createMany({
     data: ownPermissions.map((p) => ({ roleId: staffRole.id, permissionId: p.id })),
@@ -188,6 +192,18 @@ async function main() {
     })
     dealers.push(dealer)
   }
+
+  // ── Dealer Portal login (development only) ─────────────────────────────
+  await prisma.dealerUser.upsert({
+    where: { email: 'portal@autoprime.com' },
+    create: {
+      email: 'portal@autoprime.com',
+      passwordHash: await bcrypt.hash('ChangeMe123!', 12),
+      dealerId: dealers[0].id,
+      name: 'AutoPrime Motors Portal',
+    },
+    update: {},
+  })
 
   // ── Dealer Contacts ───────────────────────────────────────────────────
   const contactsData = [
@@ -342,6 +358,7 @@ async function main() {
 
   console.log('Seed complete.')
   console.log('Development admin login: admin@dealer.com / ChangeMe123!')
+  console.log('Development dealer portal login: portal@autoprime.com / ChangeMe123!')
 }
 
 main()

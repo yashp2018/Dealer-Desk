@@ -4,10 +4,9 @@
  * HTTP layer only — no business logic.
  */
 
-import { Request, Response, NextFunction } from 'express'
-import { validationResult } from 'express-validator'
-import { AppError } from '../../common/errors/AppError'
-import { respond } from '../../common/middleware/respond'
+import { Request, Response } from 'express'
+import { asyncHandler } from '../../common/utils/asyncHandler'
+import { ok, created, paginated } from '../../common/utils/response'
 import {
   listProviders,
   getProvider,
@@ -18,27 +17,8 @@ import {
 } from './provider.service'
 import { ProviderListQuery } from './provider.types'
 
-function assertValid(req: Request, next: NextFunction): boolean {
-  const errors = validationResult(req)
-  if (!errors.isEmpty()) {
-    const mapped: Record<string, string[]> = {}
-    for (const e of errors.array()) {
-      const field = 'path' in e ? (e.path as string) : 'general'
-      mapped[field] = [...(mapped[field] ?? []), e.msg as string]
-    }
-    next(AppError.badRequest('Validation failed.', mapped))
-    return false
-  }
-  return true
-}
-
-export async function handleListProviders(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    if (!assertValid(req, next)) return
+export const providerController = {
+  list: asyncHandler(async (req: Request, res: Response) => {
     const query: ProviderListQuery = {
       page: req.query.page ? Number(req.query.page) : 1,
       limit: req.query.limit ? Number(req.query.limit) : 20,
@@ -49,82 +29,31 @@ export async function handleListProviders(
       verificationStatus: req.query.verificationStatus as string | undefined,
     }
     const result = await listProviders(query)
-    respond(res, result.items, 'Providers retrieved.', 200, result.meta)
-  } catch (err) {
-    next(err)
-  }
-}
+    paginated(res, result.items, { page: result.meta.page, limit: result.meta.limit, total: result.meta.total })
+  }),
 
-export async function handleGetProvider(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    if (!assertValid(req, next)) return
-    const provider = await getProvider(req.params.id)
-    respond(res, provider, 'Provider retrieved.')
-  } catch (err) {
-    next(err)
-  }
-}
+  get: asyncHandler(async (req: Request, res: Response) => {
+    const provider = await getProvider(Number(req.params.id))
+    ok(res, provider)
+  }),
 
-export async function handleCreateProvider(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    if (!assertValid(req, next)) return
+  create: asyncHandler(async (req: Request, res: Response) => {
     const provider = await createNewProvider(req.body, req.staff?.id)
-    respond(res, provider, 'Provider created.', 201)
-  } catch (err) {
-    next(err)
-  }
-}
+    created(res, provider)
+  }),
 
-export async function handleUpdateProvider(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    if (!assertValid(req, next)) return
-    const provider = await updateExistingProvider(
-      req.params.id,
-      req.body,
-      req.staff?.role ?? 'staff',
-    )
-    respond(res, provider, 'Provider updated.')
-  } catch (err) {
-    next(err)
-  }
-}
+  update: asyncHandler(async (req: Request, res: Response) => {
+    const provider = await updateExistingProvider(Number(req.params.id), req.body, req.staff?.role ?? 'staff')
+    ok(res, provider)
+  }),
 
-export async function handleDeleteProvider(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    if (!assertValid(req, next)) return
-    const result = await removeProvider(req.params.id, req.staff?.role ?? 'staff')
-    respond(res, result, 'Provider deleted.')
-  } catch (err) {
-    next(err)
-  }
-}
+  remove: asyncHandler(async (req: Request, res: Response) => {
+    const result = await removeProvider(Number(req.params.id), req.staff?.role ?? 'staff')
+    ok(res, result)
+  }),
 
-export async function handleGetProviderServices(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    if (!assertValid(req, next)) return
-    const services = await getProviderServices(req.params.id)
-    respond(res, services, 'Provider services retrieved.')
-  } catch (err) {
-    next(err)
-  }
+  services: asyncHandler(async (req: Request, res: Response) => {
+    const services = await getProviderServices(Number(req.params.id))
+    ok(res, services)
+  }),
 }

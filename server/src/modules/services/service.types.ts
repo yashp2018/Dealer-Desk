@@ -2,10 +2,6 @@
  * modules/services/service.types.ts
  */
 
-import { Document, Types } from 'mongoose'
-
-// ─── Subdocument shapes ───────────────────────────────────────────────────────
-
 export interface ServicePricing {
   type: 'free' | 'fixed' | 'range' | 'quote'
   amount?: number
@@ -33,46 +29,18 @@ export interface ServiceLocation {
   address?: string
 }
 
-// ─── Mongoose document ────────────────────────────────────────────────────────
-
-export interface IService extends Document {
-  serviceCode: string
-  name: string
-  slug: string
-  categoryId?: string
-  categoryName?: string
-  shortDescription?: string
-  description?: string
-  images?: string[]
-  providerId?: Types.ObjectId
-  serviceType?: string
-  pricing?: ServicePricing
-  duration?: ServiceDuration
-  location?: ServiceLocation
-  availability?: ServiceAvailability
-  eligibility?: string[]
-  requiredDocuments?: string[]
-  features?: string[]
-  termsAndConditions?: string
-  status: 'draft' | 'active' | 'inactive' | 'archived'
-  isFeatured: boolean
-  createdBy?: Types.ObjectId
-  updatedAt: Date
-  createdAt: Date
-}
-
 // ─── Request / Response DTOs ──────────────────────────────────────────────────
 
 export interface CreateServiceDto {
-  serviceCode: string
+  serviceCode?: string
   name: string
-  slug: string
+  slug?: string
   categoryId?: string
   categoryName?: string
   shortDescription?: string
   description?: string
   images?: string[]
-  providerId?: string
+  providerId?: number
   serviceType?: string
   pricing?: ServicePricing
   duration?: ServiceDuration
@@ -82,7 +50,7 @@ export interface CreateServiceDto {
   requiredDocuments?: string[]
   features?: string[]
   termsAndConditions?: string
-  status?: IService['status']
+  status?: 'draft' | 'active' | 'inactive' | 'archived'
   isFeatured?: boolean
 }
 
@@ -93,7 +61,7 @@ export interface ServiceListQuery {
   limit?: number
   search?: string
   category?: string
-  provider?: string
+  provider?: number
   location?: string
   status?: string
 }

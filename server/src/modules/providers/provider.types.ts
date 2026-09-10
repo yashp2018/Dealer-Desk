@@ -2,8 +2,6 @@
  * modules/providers/provider.types.ts
  */
 
-import { Document, Types } from 'mongoose'
-
 export interface ProviderContact {
   phone?: string
   email?: string
@@ -18,27 +16,6 @@ export interface ProviderAddress {
   postalCode?: string
 }
 
-export interface IProvider extends Document {
-  providerCode: string
-  name: string
-  slug: string
-  logo?: string
-  coverImage?: string
-  shortDescription?: string
-  description?: string
-  contact?: ProviderContact
-  address?: ProviderAddress
-  categories?: string[]
-  verificationStatus: 'pending' | 'verified' | 'rejected' | 'inactive'
-  status: 'active' | 'inactive'
-  serviceCount: number
-  rating?: number
-  reviewCount?: number
-  createdBy?: Types.ObjectId
-  updatedAt: Date
-  createdAt: Date
-}
-
 export interface CreateProviderDto {
   providerCode?: string
   name: string
@@ -50,8 +27,8 @@ export interface CreateProviderDto {
   contact?: ProviderContact
   address?: ProviderAddress
   categories?: string[]
-  verificationStatus?: IProvider['verificationStatus']
-  status?: IProvider['status']
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | 'inactive'
+  status?: 'active' | 'inactive'
 }
 
 export type UpdateProviderDto = Partial<CreateProviderDto>

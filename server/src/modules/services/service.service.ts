@@ -2,7 +2,6 @@
  * modules/services/service.service.ts
  *
  * Business logic for the Services module.
- * All rules from the PHP reference layer live here, not in the controller.
  *
  * Business rules:
  * - serviceCode must be unique (case-insensitive, stored uppercase).
@@ -13,8 +12,9 @@
  * - Deleting a service is a soft-archive, not a hard delete (unless admin).
  */
 
+import { Prisma } from '@prisma/client'
 import { AppError } from '../../common/errors/AppError'
-import { nextRef } from '../../common/sequence/sequence.service'
+import { nextRefNo } from '../../common/utils/sequence'
 import {
   findServices,
   findServiceById,
@@ -26,6 +26,7 @@ import {
   findServicesByProvider,
   findServicesUpdatedSince,
 } from './service.repository'
+import { toServiceDto } from './service.mapper'
 import { CreateServiceDto, UpdateServiceDto, ServiceListQuery } from './service.types'
 
 function toSlug(name: string): string {
@@ -37,10 +38,93 @@ function toSlug(name: string): string {
     .replace(/-+/g, '-')
 }
 
+function toCreateData(dto: CreateServiceDto, serviceCode: string, slug: string, createdBy?: number): Prisma.ServiceCreateInput {
+  return {
+    serviceCode,
+    name: dto.name,
+    slug,
+    categoryId: dto.categoryId,
+    categoryName: dto.categoryName,
+    shortDescription: dto.shortDescription,
+    description: dto.description,
+    images: dto.images ?? [],
+    provider: dto.providerId ? { connect: { id: dto.providerId } } : undefined,
+    serviceType: dto.serviceType,
+    pricingType: dto.pricing?.type,
+    pricingAmount: dto.pricing?.amount,
+    pricingMinAmount: dto.pricing?.minAmount,
+    pricingMaxAmount: dto.pricing?.maxAmount,
+    pricingCurrency: dto.pricing?.currency,
+    durationValue: dto.duration?.value,
+    durationUnit: dto.duration?.unit,
+    locationCountry: dto.location?.country,
+    locationState: dto.location?.state,
+    locationCity: dto.location?.city,
+    locationAddress: dto.location?.address,
+    availabilityEnabled: dto.availability?.enabled ?? true,
+    availabilityDays: dto.availability?.days ?? [],
+    availabilityStart: dto.availability?.startTime,
+    availabilityEnd: dto.availability?.endTime,
+    eligibility: dto.eligibility ?? [],
+    requiredDocuments: dto.requiredDocuments ?? [],
+    features: dto.features ?? [],
+    termsAndConditions: dto.termsAndConditions,
+    status: dto.status ?? 'draft',
+    isFeatured: dto.isFeatured ?? false,
+    creator: createdBy ? { connect: { id: createdBy } } : undefined,
+  }
+}
+
+function toUpdateData(dto: UpdateServiceDto, slug?: string): Prisma.ServiceUpdateInput {
+  return {
+    ...(dto.name !== undefined ? { name: dto.name } : {}),
+    ...(slug !== undefined ? { slug } : {}),
+    ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+    ...(dto.categoryName !== undefined ? { categoryName: dto.categoryName } : {}),
+    ...(dto.shortDescription !== undefined ? { shortDescription: dto.shortDescription } : {}),
+    ...(dto.description !== undefined ? { description: dto.description } : {}),
+    ...(dto.images !== undefined ? { images: dto.images } : {}),
+    ...(dto.providerId !== undefined ? { provider: dto.providerId ? { connect: { id: dto.providerId } } : { disconnect: true } } : {}),
+    ...(dto.serviceType !== undefined ? { serviceType: dto.serviceType } : {}),
+    ...(dto.pricing !== undefined
+      ? {
+          pricingType: dto.pricing.type,
+          pricingAmount: dto.pricing.amount,
+          pricingMinAmount: dto.pricing.minAmount,
+          pricingMaxAmount: dto.pricing.maxAmount,
+          pricingCurrency: dto.pricing.currency,
+        }
+      : {}),
+    ...(dto.duration !== undefined ? { durationValue: dto.duration.value, durationUnit: dto.duration.unit } : {}),
+    ...(dto.location !== undefined
+      ? {
+          locationCountry: dto.location.country,
+          locationState: dto.location.state,
+          locationCity: dto.location.city,
+          locationAddress: dto.location.address,
+        }
+      : {}),
+    ...(dto.availability !== undefined
+      ? {
+          availabilityEnabled: dto.availability.enabled,
+          availabilityDays: dto.availability.days,
+          availabilityStart: dto.availability.startTime,
+          availabilityEnd: dto.availability.endTime,
+        }
+      : {}),
+    ...(dto.eligibility !== undefined ? { eligibility: dto.eligibility } : {}),
+    ...(dto.requiredDocuments !== undefined ? { requiredDocuments: dto.requiredDocuments } : {}),
+    ...(dto.features !== undefined ? { features: dto.features } : {}),
+    ...(dto.termsAndConditions !== undefined ? { termsAndConditions: dto.termsAndConditions } : {}),
+    ...(dto.status !== undefined ? { status: dto.status } : {}),
+    ...(dto.isFeatured !== undefined ? { isFeatured: dto.isFeatured } : {}),
+  }
+}
+
 export async function listServices(query: ServiceListQuery) {
   const result = await findServices(query)
   return {
-    items: result.items,
+    items: result.items.map(toServiceDto),
     meta: {
       page: result.page,
       limit: result.limit,
@@ -50,17 +134,15 @@ export async function listServices(query: ServiceListQuery) {
   }
 }
 
-export async function getService(id: string) {
+export async function getService(id: number) {
   const service = await findServiceById(id)
   if (!service) throw AppError.notFound('Service not found.')
-  return service
+  return toServiceDto(service)
 }
 
-export async function createNewService(dto: CreateServiceDto, createdBy?: string) {
-  // Auto-generate serviceCode if not provided
-  const serviceCode = dto.serviceCode?.toUpperCase() ?? (await nextRef('service'))
+export async function createNewService(dto: CreateServiceDto, createdBy?: number) {
+  const serviceCode = dto.serviceCode?.toUpperCase() ?? (await nextRefNo('SVC'))
 
-  // Uniqueness checks
   const [codeConflict, slugConflict] = await Promise.all([
     findServiceByCode(serviceCode),
     findServiceBySlug(dto.slug ?? toSlug(dto.name)),
@@ -76,21 +158,11 @@ export async function createNewService(dto: CreateServiceDto, createdBy?: string
     throw AppError.badRequest('A service cannot be set to active without an assigned provider.')
   }
 
-  return repoCreate({
-    ...dto,
-    serviceCode,
-    slug,
-    status: dto.status ?? 'draft',
-    isFeatured: dto.isFeatured ?? false,
-    createdBy: createdBy as never,
-  })
+  const created = await repoCreate(toCreateData(dto, serviceCode, slug, createdBy))
+  return toServiceDto(created)
 }
 
-export async function updateExistingService(
-  id: string,
-  dto: UpdateServiceDto,
-  role: string,
-) {
+export async function updateExistingService(id: number, dto: UpdateServiceDto, role: string) {
   const existing = await findServiceById(id)
   if (!existing) throw AppError.notFound('Service not found.')
 
@@ -101,7 +173,7 @@ export async function updateExistingService(
 
   // Business rule: active requires provider
   const newStatus = dto.status ?? existing.status
-  const newProvider = dto.providerId ?? existing.providerId?.toString()
+  const newProvider = dto.providerId ?? existing.providerId ?? undefined
   if (newStatus === 'active' && !newProvider) {
     throw AppError.badRequest('A service cannot be set to active without an assigned provider.')
   }
@@ -112,19 +184,20 @@ export async function updateExistingService(
   }
 
   // Slug uniqueness if changing
+  let slug: string | undefined
   if (dto.slug && dto.slug !== existing.slug) {
     const conflict = await findServiceBySlug(dto.slug)
-    if (conflict && conflict._id?.toString() !== id) {
+    if (conflict && conflict.id !== id) {
       throw AppError.conflict(`Slug '${dto.slug}' is already in use.`)
     }
+    slug = dto.slug
   }
 
-  const updated = await repoUpdate(id, dto as never)
-  if (!updated) throw AppError.notFound('Service not found.')
-  return updated
+  const updated = await repoUpdate(id, toUpdateData(dto, slug))
+  return toServiceDto(updated)
 }
 
-export async function archiveService(id: string, role: string) {
+export async function archiveService(id: number, role: string) {
   const existing = await findServiceById(id)
   if (!existing) throw AppError.notFound('Service not found.')
 
@@ -135,14 +208,14 @@ export async function archiveService(id: string, role: string) {
   }
 
   // Soft archive for non-admins
-  const updated = await repoUpdate(id, { status: 'archived' } as never)
-  return updated
+  const updated = await repoUpdate(id, { status: 'archived' })
+  return toServiceDto(updated)
 }
 
-export async function getServicesByProvider(providerId: string) {
+export async function getServicesByProvider(providerId: number) {
   return findServicesByProvider(providerId)
 }
 
 export async function getServicesUpdatedSince(since: Date) {
-  return findServicesUpdatedSince(since)
+  return (await findServicesUpdatedSince(since)).map(toServiceDto)
 }

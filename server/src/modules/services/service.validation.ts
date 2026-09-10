@@ -1,70 +1,65 @@
-/**
- * modules/services/service.validation.ts
- *
- * express-validator rule sets for service endpoints.
- */
+import { z } from 'zod'
 
-import { body, query, param } from 'express-validator'
+const pricingSchema = z.object({
+  type: z.enum(['free', 'fixed', 'range', 'quote']),
+  amount: z.number().min(0).optional(),
+  minAmount: z.number().min(0).optional(),
+  maxAmount: z.number().min(0).optional(),
+  currency: z.string().optional(),
+})
 
-export const validateCreateService = [
-  body('name').trim().notEmpty().withMessage('Name is required.'),
-  body('serviceCode')
-    .optional()
-    .trim()
-    .isAlphanumeric()
-    .withMessage('Service code must be alphanumeric.'),
-  body('slug')
-    .optional()
-    .trim()
-    .matches(/^[a-z0-9-]+$/)
-    .withMessage('Slug must be lowercase letters, numbers, and hyphens only.'),
-  body('status')
-    .optional()
-    .isIn(['draft', 'active', 'inactive', 'archived'])
-    .withMessage('Invalid status value.'),
-  body('pricing.type')
-    .optional()
-    .isIn(['free', 'fixed', 'range', 'quote'])
-    .withMessage('Invalid pricing type.'),
-  body('pricing.amount')
-    .optional()
-    .isFloat({ min: 0 })
-    .withMessage('Pricing amount must be a positive number.'),
-  body('isFeatured').optional().isBoolean().withMessage('isFeatured must be a boolean.'),
-  body('availability.days')
-    .optional()
-    .isArray()
-    .withMessage('Availability days must be an array.'),
-]
+const availabilitySchema = z.object({
+  enabled: z.boolean().default(true),
+  days: z.array(z.string()).default([]),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+})
 
-export const validateUpdateService = [
-  param('id').isMongoId().withMessage('Invalid service ID.'),
-  body('name').optional().trim().notEmpty().withMessage('Name cannot be empty.'),
-  body('slug')
-    .optional()
-    .trim()
-    .matches(/^[a-z0-9-]+$/)
-    .withMessage('Slug must be lowercase letters, numbers, and hyphens only.'),
-  body('status')
-    .optional()
-    .isIn(['draft', 'active', 'inactive', 'archived'])
-    .withMessage('Invalid status value.'),
-  body('pricing.type')
-    .optional()
-    .isIn(['free', 'fixed', 'range', 'quote'])
-    .withMessage('Invalid pricing type.'),
-  body('isFeatured').optional().isBoolean().withMessage('isFeatured must be a boolean.'),
-]
+const durationSchema = z.object({
+  value: z.number().positive(),
+  unit: z.enum(['minutes', 'hours', 'days']),
+})
 
-export const validateServiceListQuery = [
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer.'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be 1–100.'),
-  query('status')
-    .optional()
-    .isIn(['draft', 'active', 'inactive', 'archived'])
-    .withMessage('Invalid status filter.'),
-]
+const locationSchema = z.object({
+  country: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
+  address: z.string().optional(),
+})
 
-export const validateServiceId = [
-  param('id').isMongoId().withMessage('Invalid service ID.'),
-]
+export const createServiceSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required.'),
+  serviceCode: z.string().trim().regex(/^[a-zA-Z0-9]+$/, 'Service code must be alphanumeric.').optional(),
+  slug: z.string().trim().regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only.').optional(),
+  categoryId: z.string().optional(),
+  categoryName: z.string().optional(),
+  shortDescription: z.string().optional(),
+  description: z.string().optional(),
+  images: z.array(z.string()).optional(),
+  providerId: z.coerce.number().int().positive().optional(),
+  serviceType: z.string().optional(),
+  pricing: pricingSchema.optional(),
+  duration: durationSchema.optional(),
+  location: locationSchema.optional(),
+  availability: availabilitySchema.optional(),
+  eligibility: z.array(z.string()).optional(),
+  requiredDocuments: z.array(z.string()).optional(),
+  features: z.array(z.string()).optional(),
+  termsAndConditions: z.string().optional(),
+  status: z.enum(['draft', 'active', 'inactive', 'archived']).optional(),
+  isFeatured: z.boolean().optional(),
+})
+
+export const updateServiceSchema = createServiceSchema.partial()
+
+export const serviceListQuery = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  search: z.string().optional(),
+  category: z.string().optional(),
+  provider: z.coerce.number().int().positive().optional(),
+  location: z.string().optional(),
+  status: z.enum(['draft', 'active', 'inactive', 'archived']).optional(),
+})
+
+export const serviceIdParam = z.object({ id: z.coerce.number().int().positive() })

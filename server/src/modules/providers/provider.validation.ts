@@ -1,78 +1,44 @@
-/**
- * modules/providers/provider.validation.ts
- */
+import { z } from 'zod'
 
-import { body, query, param } from 'express-validator'
+const contactSchema = z.object({
+  phone: z.string().optional(),
+  email: z.string().email('Contact email must be a valid email address.').optional(),
+  website: z.string().url('Contact website must be a valid URL.').optional(),
+})
 
-export const validateCreateProvider = [
-  body('name').trim().notEmpty().withMessage('Provider name is required.'),
-  body('providerCode')
-    .optional()
-    .trim()
-    .isAlphanumeric()
-    .withMessage('Provider code must be alphanumeric.'),
-  body('slug')
-    .optional()
-    .trim()
-    .matches(/^[a-z0-9-]+$/)
-    .withMessage('Slug must be lowercase letters, numbers, and hyphens only.'),
-  body('contact.email')
-    .optional()
-    .isEmail()
-    .withMessage('Contact email must be a valid email address.'),
-  body('contact.website')
-    .optional()
-    .isURL()
-    .withMessage('Contact website must be a valid URL.'),
-  body('verificationStatus')
-    .optional()
-    .isIn(['pending', 'verified', 'rejected', 'inactive'])
-    .withMessage('Invalid verification status.'),
-  body('status')
-    .optional()
-    .isIn(['active', 'inactive'])
-    .withMessage('Status must be active or inactive.'),
-  body('categories')
-    .optional()
-    .isArray()
-    .withMessage('Categories must be an array.'),
-]
+const addressSchema = z.object({
+  country: z.string().optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
+  address: z.string().optional(),
+  postalCode: z.string().optional(),
+})
 
-export const validateUpdateProvider = [
-  param('id').isMongoId().withMessage('Invalid provider ID.'),
-  body('name').optional().trim().notEmpty().withMessage('Name cannot be empty.'),
-  body('slug')
-    .optional()
-    .trim()
-    .matches(/^[a-z0-9-]+$/)
-    .withMessage('Slug must be lowercase letters, numbers, and hyphens only.'),
-  body('contact.email')
-    .optional()
-    .isEmail()
-    .withMessage('Contact email must be a valid email address.'),
-  body('verificationStatus')
-    .optional()
-    .isIn(['pending', 'verified', 'rejected', 'inactive'])
-    .withMessage('Invalid verification status.'),
-  body('status')
-    .optional()
-    .isIn(['active', 'inactive'])
-    .withMessage('Status must be active or inactive.'),
-]
+export const createProviderSchema = z.object({
+  name: z.string().trim().min(1, 'Provider name is required.'),
+  providerCode: z.string().trim().regex(/^[a-zA-Z0-9]+$/, 'Provider code must be alphanumeric.').optional(),
+  slug: z.string().trim().regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only.').optional(),
+  logo: z.string().optional(),
+  coverImage: z.string().optional(),
+  shortDescription: z.string().optional(),
+  description: z.string().optional(),
+  contact: contactSchema.optional(),
+  address: addressSchema.optional(),
+  categories: z.array(z.string()).optional(),
+  verificationStatus: z.enum(['pending', 'verified', 'rejected', 'inactive']).optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+})
 
-export const validateProviderListQuery = [
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer.'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be 1–100.'),
-  query('status')
-    .optional()
-    .isIn(['active', 'inactive'])
-    .withMessage('Invalid status filter.'),
-  query('verificationStatus')
-    .optional()
-    .isIn(['pending', 'verified', 'rejected', 'inactive'])
-    .withMessage('Invalid verification status filter.'),
-]
+export const updateProviderSchema = createProviderSchema.partial()
 
-export const validateProviderId = [
-  param('id').isMongoId().withMessage('Invalid provider ID.'),
-]
+export const providerListQuery = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  search: z.string().optional(),
+  category: z.string().optional(),
+  location: z.string().optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  verificationStatus: z.enum(['pending', 'verified', 'rejected', 'inactive']).optional(),
+})
+
+export const providerIdParam = z.object({ id: z.coerce.number().int().positive() })
