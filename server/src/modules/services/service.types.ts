@@ -1,0 +1,99 @@
+/**
+ * modules/services/service.types.ts
+ */
+
+import { Document, Types } from 'mongoose'
+
+// ─── Subdocument shapes ───────────────────────────────────────────────────────
+
+export interface ServicePricing {
+  type: 'free' | 'fixed' | 'range' | 'quote'
+  amount?: number
+  minAmount?: number
+  maxAmount?: number
+  currency?: string
+}
+
+export interface ServiceAvailability {
+  enabled: boolean
+  days: string[]
+  startTime?: string
+  endTime?: string
+}
+
+export interface ServiceDuration {
+  value: number
+  unit: 'minutes' | 'hours' | 'days'
+}
+
+export interface ServiceLocation {
+  country?: string
+  state?: string
+  city?: string
+  address?: string
+}
+
+// ─── Mongoose document ────────────────────────────────────────────────────────
+
+export interface IService extends Document {
+  serviceCode: string
+  name: string
+  slug: string
+  categoryId?: string
+  categoryName?: string
+  shortDescription?: string
+  description?: string
+  images?: string[]
+  providerId?: Types.ObjectId
+  serviceType?: string
+  pricing?: ServicePricing
+  duration?: ServiceDuration
+  location?: ServiceLocation
+  availability?: ServiceAvailability
+  eligibility?: string[]
+  requiredDocuments?: string[]
+  features?: string[]
+  termsAndConditions?: string
+  status: 'draft' | 'active' | 'inactive' | 'archived'
+  isFeatured: boolean
+  createdBy?: Types.ObjectId
+  updatedAt: Date
+  createdAt: Date
+}
+
+// ─── Request / Response DTOs ──────────────────────────────────────────────────
+
+export interface CreateServiceDto {
+  serviceCode: string
+  name: string
+  slug: string
+  categoryId?: string
+  categoryName?: string
+  shortDescription?: string
+  description?: string
+  images?: string[]
+  providerId?: string
+  serviceType?: string
+  pricing?: ServicePricing
+  duration?: ServiceDuration
+  location?: ServiceLocation
+  availability?: ServiceAvailability
+  eligibility?: string[]
+  requiredDocuments?: string[]
+  features?: string[]
+  termsAndConditions?: string
+  status?: IService['status']
+  isFeatured?: boolean
+}
+
+export type UpdateServiceDto = Partial<CreateServiceDto>
+
+export interface ServiceListQuery {
+  page?: number
+  limit?: number
+  search?: string
+  category?: string
+  provider?: string
+  location?: string
+  status?: string
+}

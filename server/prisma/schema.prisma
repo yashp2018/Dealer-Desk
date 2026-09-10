@@ -1,0 +1,499 @@
+// Dealer Desk — Prisma schema (MySQL)
+// Field names are snake_case via @map to match the existing frontend contract
+// (src/api/types.ts) exactly — no frontend changes required.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Auth / Staff / RBAC
+// ─────────────────────────────────────────────────────────────────────────
+
+model Staff {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  failedLoginCount Int  @default(0) @map("failed_login_count")
+  lockedUntil  DateTime? @map("locked_until")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  roles              StaffRole[]
+  refreshTokens      RefreshToken[]
+  ownedDealers        Dealer[]        @relation("DealerOwner")
+  ownedProspects      Prospect[]      @relation("ProspectOwner")
+  ownedRequests       Request[]       @relation("RequestOwner")
+  ownedVisits         Visit[]         @relation("VisitOwner")
+  notifications       Notification[]
+  timelineEntries     TimelineEntry[]
+  auditLogs           AuditLog[]
+
+  @@map("staff")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  permissions RolePermission[]
+  staff       StaffRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id    Int    @id @default(autoincrement())
+  key   String @unique // e.g. "dealers.view", "requests.assign"
+  label String
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int @map("role_id")
+  permissionId Int @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model StaffRole {
+  staffId Int @map("staff_id")
+  roleId  Int @map("role_id")
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([staffId, roleId])
+  @@map("staff_roles")
+}
+
+model RefreshToken {
+  id         Int       @id @default(autoincrement())
+  staffId    Int       @map("staff_id")
+  tokenHash  String    @unique @map("token_hash")
+  deviceId   String    @map("device_id")
+  platform   String
+  appVersion String    @map("app_version")
+  osVersion  String    @map("os_version")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  replacedBy String?   @map("replaced_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Master data / setup (bootstrap payload)
+// ─────────────────────────────────────────────────────────────────────────
+
+model Tier {
+  id         Int     @id @default(autoincrement())
+  name       String
+  multiplier Float
+  color      String  @default("#6b7280") // used to render Dealer.tier_color; not part of the bootstrap Tier payload
+
+  dealers Dealer[]
+
+  @@map("tiers")
+}
+
+model Territory {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  dealers Dealer[]
+
+  @@map("territories")
+}
+
+model VisitType {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  visits Visit[]
+
+  @@map("visit_types")
+}
+
+model DocType {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  @@map("doc_types")
+}
+
+model RequestType {
+  id              Int      @id @default(autoincrement())
+  name            String
+  slug            String   @unique
+  icon            String
+  color           String
+  defaultPriority Int      @map("default_priority")
+  slaHours        Int      @map("sla_hours")
+  pushTarget      String?  @map("push_target")
+  allowsProspect  Boolean  @default(false) @map("allows_prospect")
+
+  fields   RequestTypeField[]
+  requests Request[]
+
+  @@map("request_types")
+}
+
+model RequestTypeField {
+  id            Int    @id @default(autoincrement())
+  requestTypeId Int    @map("request_type_id")
+  key           String
+  label         String
+  inputType     String @map("input_type") // text|number|textarea|select|date|toggle|photo|item_ref
+  source        String?
+  options       Json   @default("[]")
+  filter        String?
+  isRequired    Boolean @default(false) @map("is_required")
+  sortOrder     Int     @default(0) @map("sort_order")
+  helpText      String  @default("") @map("help_text")
+
+  requestType RequestType @relation(fields: [requestTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([requestTypeId, key])
+  @@map("request_type_fields")
+}
+
+/// Configurable status labels, keyed per entity (request, visit, prospect).
+model StatusConfig {
+  id         Int    @id @default(autoincrement())
+  entityType String @map("entity_type") // "request" | "visit" | "prospect"
+  key        String
+  label      String
+  sortOrder  Int    @default(0) @map("sort_order")
+
+  @@unique([entityType, key])
+  @@map("status_config")
+}
+
+/// Allowed status transitions per entity type: from -> [to, to, ...]
+model StatusTransition {
+  id         Int    @id @default(autoincrement())
+  entityType String @map("entity_type")
+  fromStatus String @map("from_status")
+  toStatus   String @map("to_status")
+
+  @@unique([entityType, fromStatus, toStatus])
+  @@map("status_transitions")
+}
+
+model AppConfig {
+  key   String @id
+  value Json
+
+  @@map("app_config")
+}
+
+/// Atomic counters for human-readable reference numbers (REQ-000123 etc.)
+model Sequence {
+  name  String @id
+  value Int    @default(0)
+
+  @@map("sequences")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Dealers
+// ─────────────────────────────────────────────────────────────────────────
+
+model Dealer {
+  id                 Int       @id @default(autoincrement())
+  code               String    @unique
+  name               String
+  displayName        String    @map("display_name")
+  tierId             Int       @map("tier_id")
+  territoryId        Int       @map("territory_id")
+  city               String    @default("")
+  stateNormalized    String    @default("") @map("state_normalized")
+  health             String    @default("good") // good|warning|critical
+  healthScore        Int?      @map("health_score")
+  phonePrimary       String    @default("") @map("phone_primary")
+  whatsappPhone      String    @default("") @map("whatsapp_phone")
+  ownerStaffId       Int?      @map("owner_staff_id")
+  clientId           Int?      @map("client_id")
+  territoryIsManual  Boolean   @default(false) @map("territory_is_manual")
+  lastContactAt      DateTime? @map("last_contact_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  tier      Tier      @relation(fields: [tierId], references: [id])
+  territory Territory @relation(fields: [territoryId], references: [id])
+  owner     Staff?    @relation("DealerOwner", fields: [ownerStaffId], references: [id])
+
+  contacts  DealerContact[]
+  requests  Request[]
+  visits    Visit[]
+  prospects Prospect[]      @relation("ConvertedDealer")
+
+  @@index([territoryId])
+  @@index([tierId])
+  @@index([ownerStaffId])
+  @@map("dealers")
+}
+
+model DealerContact {
+  id        Int     @id @default(autoincrement())
+  dealerId  Int     @map("dealer_id")
+  name      String
+  roleLabel String  @default("") @map("role_label")
+  phone     String  @default("")
+  email     String  @default("")
+  isPrimary Boolean @default(false) @map("is_primary")
+  isActive  Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@index([dealerId])
+  @@map("dealer_contacts")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Prospects
+// ─────────────────────────────────────────────────────────────────────────
+
+model Prospect {
+  id                Int       @id @default(autoincrement())
+  refNo             String    @unique @map("ref_no")
+  companyName       String    @map("company_name")
+  contactName       String    @default("") @map("contact_name")
+  email             String    @default("")
+  phone             String    @default("")
+  whatsapp          String    @default("")
+  city              String    @default("")
+  stateNormalized   String    @default("") @map("state_normalized")
+  stage             String    @default("new")
+  stageChangedAt    DateTime  @default(now()) @map("stage_changed_at")
+  ownerStaffId      Int       @map("owner_staff_id")
+  source            String    @default("")
+  convertedDealerId Int?      @unique @map("converted_dealer_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  owner          Staff      @relation("ProspectOwner", fields: [ownerStaffId], references: [id])
+  convertedDealer Dealer?   @relation("ConvertedDealer", fields: [convertedDealerId], references: [id])
+
+  onboardingItems OnboardingItem[]
+  visits          Visit[]
+  requests        Request[]
+
+  @@index([ownerStaffId])
+  @@index([stage])
+  @@map("prospects")
+}
+
+model OnboardingItem {
+  id         Int     @id @default(autoincrement())
+  prospectId Int     @map("prospect_id")
+  docName    String  @map("doc_name")
+  isRequired Boolean @default(true) @map("is_required")
+  status     String  @default("pending") // pending|received|verified|rejected
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId])
+  @@map("onboarding_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Requests
+// ─────────────────────────────────────────────────────────────────────────
+
+model Request {
+  id                  Int       @id @default(autoincrement())
+  refNo               String    @unique @map("ref_no")
+  title               String
+  description         String?   @db.Text
+  typeId              Int       @map("type_id")
+  status              String    @default("new")
+  priority            Int       @default(3)
+  priorityOverride    Int?      @map("priority_override")
+  priorityReason      String?   @map("priority_reason")
+  dealerId            Int?      @map("dealer_id")
+  prospectId          Int?      @map("prospect_id")
+  ownerStaffId        Int?      @map("owner_staff_id")
+  dueAt               DateTime? @map("due_at")
+  scheduledAt         DateTime? @map("scheduled_at")
+  completionRequired  Int       @default(0) @map("completion_required")
+  completionDone      Int       @default(0) @map("completion_done")
+  closedReason        String?   @map("closed_reason")
+  doneAt              DateTime? @map("done_at")
+  erpExternalRef      String?   @map("erp_external_ref")
+  erpSyncStatus       String?   @map("erp_sync_status") // pending|pushed|failed
+  clientUuid          String?   @unique @map("client_uuid") // idempotency key
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  type     RequestType @relation(fields: [typeId], references: [id])
+  dealer   Dealer?     @relation(fields: [dealerId], references: [id])
+  prospect Prospect?   @relation(fields: [prospectId], references: [id])
+  owner    Staff?      @relation("RequestOwner", fields: [ownerStaffId], references: [id])
+
+  fields RequestFieldValue[]
+  lines  RequestLine[]
+
+  @@index([dealerId])
+  @@index([prospectId])
+  @@index([ownerStaffId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueAt])
+  @@index([scheduledAt])
+  @@map("requests")
+}
+
+model RequestFieldValue {
+  id        Int    @id @default(autoincrement())
+  requestId Int    @map("request_id")
+  key       String
+  value     String @db.Text
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, key])
+  @@map("request_field_values")
+}
+
+model RequestLine {
+  id          Int     @id @default(autoincrement())
+  requestId   Int     @map("request_id")
+  description String
+  qty         Float   @default(1)
+  unitRate    Float?  @map("unit_rate")
+  total       Float?
+
+  request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("request_lines")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Visits
+// ─────────────────────────────────────────────────────────────────────────
+
+model Visit {
+  id           Int       @id @default(autoincrement())
+  refNo        String    @unique @map("ref_no")
+  dealerId     Int?      @map("dealer_id")
+  prospectId   Int?      @map("prospect_id")
+  visitTypeId  Int       @map("visit_type_id")
+  title        String    @default("")
+  scheduledAt  DateTime  @map("scheduled_at")
+  startAt      DateTime? @map("start_at")
+  endAt        DateTime? @map("end_at")
+  status       String    @default("scheduled") // scheduled|in_progress|done|cancelled
+  outcome      String?
+  outcomeNote  String?   @map("outcome_note") @db.Text
+  nextStep     String?   @map("next_step")
+  nextAt       DateTime? @map("next_at")
+  ownerStaffId Int       @map("owner_staff_id")
+  agendaJson   Json?     @map("agenda_json")
+  clientUuid   String?   @unique @map("client_uuid")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  dealer    Dealer?   @relation(fields: [dealerId], references: [id])
+  prospect  Prospect? @relation(fields: [prospectId], references: [id])
+  visitType VisitType @relation(fields: [visitTypeId], references: [id])
+  owner     Staff     @relation("VisitOwner", fields: [ownerStaffId], references: [id])
+
+  @@index([dealerId])
+  @@index([prospectId])
+  @@index([ownerStaffId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("visits")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Cross-cutting: timeline, notifications, audit, sync
+// ─────────────────────────────────────────────────────────────────────────
+
+model TimelineEntry {
+  id           Int      @id @default(autoincrement())
+  entityType   String   @map("entity_type") // dealer|prospect|request|visit
+  entityId     Int      @map("entity_id")
+  eventType    String   @map("event_type")
+  summary      String   @db.Text
+  actorStaffId Int?     @map("actor_staff_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  actor Staff? @relation(fields: [actorStaffId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("timeline_entries")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  staffId   Int      @map("staff_id")
+  title     String
+  body      String   @db.Text
+  message   String   @db.Text
+  linkUrl   String?  @map("link_url")
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorStaffId Int?     @map("actor_staff_id")
+  action       String
+  entityType   String   @map("entity_type")
+  entityId     Int?     @map("entity_id")
+  beforeJson   Json?    @map("before_json")
+  afterJson    Json?    @map("after_json")
+  ip           String?
+  userAgent    String?  @map("user_agent")
+  requestId    String?  @map("request_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  actor Staff? @relation(fields: [actorStaffId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorStaffId])
+  @@map("audit_logs")
+}
+
+/// Records every mutation UUID applied via /sync/batch so repeats are no-ops.
+model SyncMutation {
+  clientUuid String   @id @map("client_uuid")
+  staffId    Int      @map("staff_id")
+  opType     String   @map("op_type")
+  entityType String   @map("entity_type")
+  entityId   Int?     @map("entity_id")
+  status     String   @default("applied") // applied|failed
+  error      String?  @db.Text
+  appliedAt  DateTime @default(now()) @map("applied_at")
+
+  @@map("sync_mutations")
+}

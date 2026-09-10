@@ -1,0 +1,37 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: dealer_desk
+      MYSQL_USER: dealerdesk
+      MYSQL_PASSWORD: dealerdesk
+      MYSQL_ROOT_PASSWORD: root_change_me
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: mysql://dealerdesk:dealerdesk@mysql:3306/dealer_desk
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set a real secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set a real secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+    ports:
+      - '4000:4000'
+
+volumes:
+  mysql_data:
