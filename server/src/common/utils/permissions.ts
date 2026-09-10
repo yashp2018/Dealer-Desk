@@ -1,17 +1,15 @@
-import { StaffRoleModel } from '../../models/role.model'
+import { prisma } from '../../config/database'
 
-export async function getStaffPermissions(staffId: string): Promise<string[]> {
-  const staffRoles = await StaffRoleModel.find({ staffId })
-    .populate({ path: 'roleId', populate: { path: 'permissions' } })
-    .lean()
+export async function getStaffPermissions(staffId: number): Promise<string[]> {
+  const staffRoles = await prisma.staffRole.findMany({
+    where: { staffId },
+    include: { role: { include: { permissions: { include: { permission: true } } } } },
+  })
 
   const permissionKeys = new Set<string>()
   for (const sr of staffRoles) {
-    const role = sr.roleId as unknown as { permissions: Array<{ key: string }> }
-    if (role?.permissions) {
-      for (const p of role.permissions) {
-        permissionKeys.add(p.key)
-      }
+    for (const rp of sr.role.permissions) {
+      permissionKeys.add(rp.permission.key)
     }
   }
   return Array.from(permissionKeys)

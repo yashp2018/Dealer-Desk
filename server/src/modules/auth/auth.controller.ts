@@ -47,7 +47,7 @@ export const authController = {
   }),
 
   logoutAll: asyncHandler(async (req: Request, res: Response) => {
-    await authService.logoutAll(req.staff!.id)
+    await authService.logoutAll(req.staff!.id, req.staff!.role)
     res.clearCookie(REFRESH_COOKIE, cookieOptions)
     ok(res, null, 'Logged out from all devices')
   }),
@@ -62,7 +62,7 @@ export const authController = {
   }),
 
   changePassword: asyncHandler(async (req: Request, res: Response) => {
-    await authService.changePassword(req.staff!.id, req.body.current_password, req.body.new_password)
+    await authService.changePassword(req.staff!.id, req.staff!.role, req.body.current_password, req.body.new_password)
     ok(res, null, 'Password updated')
   }),
 }

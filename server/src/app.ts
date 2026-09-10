@@ -28,8 +28,10 @@ export function createApp(): Application {
   app.use(cors(corsOptions))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.use(compression() as any)
-  app.use(express.json({ limit: '2mb' }))
-  app.use(express.urlencoded({ extended: true, limit: '2mb' }))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.use(express.json({ limit: '2mb' }) as any)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.use(express.urlencoded({ extended: true, limit: '2mb' }) as any)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   app.use(cookieParser() as any)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

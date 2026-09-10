@@ -1,12 +1,12 @@
 import pino from 'pino'
 import pinoHttp from 'pino-http'
 import { randomUUID } from 'crypto'
-import { resolve } from 'path'
-import { env, isProd } from './env'
+import { env, isProd, isTest } from './env'
 
-const pinoPrettyTarget = isProd
-  ? undefined
-  : resolve(__dirname, '../../node_modules/pino-pretty')
+// pino-pretty runs in a worker thread; its own module resolution needs the
+// bare package name (not a resolved directory path — that trips Node's
+// strict ESM resolver via pino's `real-require` loader).
+const pinoPrettyTarget = isProd || isTest ? undefined : 'pino-pretty'
 
 export const logger = pino({
   level: env.LOG_LEVEL,

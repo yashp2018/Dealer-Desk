@@ -1,15 +1,20 @@
-import { SequenceModel } from '../../models/sequence.model'
+import { Prisma } from '@prisma/client'
+import { prisma } from '../../config/database'
 
-export async function nextSequenceValue(name: string): Promise<number> {
-  const doc = await SequenceModel.findOneAndUpdate(
-    { name },
-    { $inc: { value: 1 } },
-    { new: true, upsert: true },
-  )
-  return doc!.value
+type TxClient = Prisma.TransactionClient
+
+async function nextSequenceValue(name: string, tx?: TxClient): Promise<number> {
+  const client = tx ?? prisma
+  const key = name.toLowerCase()
+  const seq = await client.sequence.upsert({
+    where: { name: key },
+    create: { name: key, value: 1 },
+    update: { value: { increment: 1 } },
+  })
+  return seq.value
 }
 
-export async function nextRefNo(prefix: string, padLength = 6): Promise<string> {
-  const value = await nextSequenceValue(prefix.toLowerCase())
+export async function nextRefNo(prefix: string, tx?: TxClient, padLength = 6): Promise<string> {
+  const value = await nextSequenceValue(prefix, tx)
   return `${prefix}-${String(value).padStart(padLength, '0')}`
 }

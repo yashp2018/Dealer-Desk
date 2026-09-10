@@ -19,7 +19,7 @@ export function requireInternal(req: Request, _res: Response, next: NextFunction
  * Ensures the authenticated dealer owns the resource identified by dealerId.
  * Admin bypasses this check. Staff uses normal permission checks (not this middleware).
  */
-export function requireDealerOwnership(getDealerId: (req: Request) => string | undefined) {
+export function requireDealerOwnership(getDealerId: (req: Request) => number | undefined) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.staff) { next(new UnauthorizedError()); return }
     if (req.staff.role === 'admin') { next(); return }

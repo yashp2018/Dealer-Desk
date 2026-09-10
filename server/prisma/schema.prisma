@@ -35,6 +35,8 @@ model Staff {
   notifications       Notification[]
   timelineEntries     TimelineEntry[]
   auditLogs           AuditLog[]
+  createdProviders    Provider[]
+  createdServices     Service[]
 
   @@map("staff")
 }
@@ -84,21 +86,24 @@ model StaffRole {
 }
 
 model RefreshToken {
-  id         Int       @id @default(autoincrement())
-  staffId    Int       @map("staff_id")
-  tokenHash  String    @unique @map("token_hash")
-  deviceId   String    @map("device_id")
-  platform   String
-  appVersion String    @map("app_version")
-  osVersion  String    @map("os_version")
-  expiresAt  DateTime  @map("expires_at")
-  revokedAt  DateTime? @map("revoked_at")
-  replacedBy String?   @map("replaced_by")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id           Int       @id @default(autoincrement())
+  staffId      Int?      @map("staff_id")
+  dealerUserId Int?      @map("dealer_user_id")
+  tokenHash    String    @unique @map("token_hash")
+  deviceId     String    @map("device_id")
+  platform     String
+  appVersion   String    @map("app_version")
+  osVersion    String    @map("os_version")
+  expiresAt    DateTime  @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  replacedBy   String?   @map("replaced_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
-  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staff      Staff?      @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  dealerUser DealerUser? @relation(fields: [dealerUserId], references: [id], onDelete: Cascade)
 
   @@index([staffId])
+  @@index([dealerUserId])
   @@map("refresh_tokens")
 }
 
@@ -244,10 +249,11 @@ model Dealer {
   territory Territory @relation(fields: [territoryId], references: [id])
   owner     Staff?    @relation("DealerOwner", fields: [ownerStaffId], references: [id])
 
-  contacts  DealerContact[]
-  requests  Request[]
-  visits    Visit[]
-  prospects Prospect[]      @relation("ConvertedDealer")
+  contacts    DealerContact[]
+  requests    Request[]
+  visits      Visit[]
+  prospects   Prospect[]      @relation("ConvertedDealer")
+  dealerUsers DealerUser[]
 
   @@index([territoryId])
   @@index([tierId])
@@ -482,6 +488,114 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorStaffId])
   @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Dealer portal login
+// ─────────────────────────────────────────────────────────────────────────
+
+model DealerUser {
+  id               Int       @id @default(autoincrement())
+  email            String    @unique
+  passwordHash     String    @map("password_hash")
+  dealerId         Int       @map("dealer_id")
+  name             String
+  isActive         Boolean   @default(true) @map("is_active")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  lockedUntil      DateTime? @map("locked_until")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  dealer        Dealer         @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([dealerId])
+  @@map("dealer_users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Services / Providers catalog
+// ─────────────────────────────────────────────────────────────────────────
+
+model Provider {
+  id                 Int      @id @default(autoincrement())
+  providerCode       String   @unique @map("provider_code")
+  name               String
+  slug               String   @unique
+  logo               String?
+  coverImage         String?  @map("cover_image")
+  shortDescription   String?  @map("short_description")
+  description        String?  @db.Text
+  contactPhone       String?  @map("contact_phone")
+  contactEmail       String?  @map("contact_email")
+  contactWebsite     String?  @map("contact_website")
+  addressCountry     String?  @map("address_country")
+  addressState       String?  @map("address_state")
+  addressCity        String?  @map("address_city")
+  addressLine        String?  @map("address_line")
+  addressPostalCode  String?  @map("address_postal_code")
+  categories         Json     @default("[]")
+  verificationStatus String   @default("pending") @map("verification_status") // pending|verified|rejected|inactive
+  status             String   @default("active") // active|inactive
+  serviceCount       Int      @default(0) @map("service_count")
+  rating             Float?
+  reviewCount        Int      @default(0) @map("review_count")
+  createdBy          Int?     @map("created_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  creator  Staff?    @relation(fields: [createdBy], references: [id])
+  services Service[]
+
+  @@index([status])
+  @@index([verificationStatus])
+  @@map("providers")
+}
+
+model Service {
+  id                  Int      @id @default(autoincrement())
+  serviceCode         String   @unique @map("service_code")
+  name                String
+  slug                String   @unique
+  categoryId          String?  @map("category_id")
+  categoryName        String?  @map("category_name")
+  shortDescription    String?  @map("short_description")
+  description         String?  @db.Text
+  images              Json     @default("[]")
+  providerId          Int?     @map("provider_id")
+  serviceType         String?  @map("service_type")
+  pricingType         String?  @map("pricing_type") // free|fixed|range|quote
+  pricingAmount       Float?   @map("pricing_amount")
+  pricingMinAmount    Float?   @map("pricing_min_amount")
+  pricingMaxAmount    Float?   @map("pricing_max_amount")
+  pricingCurrency     String?  @map("pricing_currency")
+  durationValue       Float?   @map("duration_value")
+  durationUnit        String?  @map("duration_unit") // minutes|hours|days
+  locationCountry     String?  @map("location_country")
+  locationState       String?  @map("location_state")
+  locationCity        String?  @map("location_city")
+  locationAddress     String?  @map("location_address")
+  availabilityEnabled Boolean  @default(true) @map("availability_enabled")
+  availabilityDays    Json     @default("[]") @map("availability_days")
+  availabilityStart   String?  @map("availability_start")
+  availabilityEnd     String?  @map("availability_end")
+  eligibility         Json     @default("[]")
+  requiredDocuments   Json     @default("[]") @map("required_documents")
+  features            Json     @default("[]")
+  termsAndConditions  String?  @map("terms_and_conditions") @db.Text
+  status              String   @default("draft") // draft|active|inactive|archived
+  isFeatured          Boolean  @default(false) @map("is_featured")
+  createdBy           Int?     @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  provider Provider? @relation(fields: [providerId], references: [id])
+  creator  Staff?    @relation(fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@index([providerId])
+  @@index([categoryId])
+  @@map("services")
 }
 
 /// Records every mutation UUID applied via /sync/batch so repeats are no-ops.

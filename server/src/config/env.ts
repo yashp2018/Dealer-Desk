@@ -6,7 +6,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   API_PREFIX: z.string().default('/api/v1'),
 
-  MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
   JWT_ACCESS_SECRET: z.string().min(16, 'JWT_ACCESS_SECRET must be at least 16 characters'),
   JWT_REFRESH_SECRET: z.string().min(16, 'JWT_REFRESH_SECRET must be at least 16 characters'),

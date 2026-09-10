@@ -1,21 +1,20 @@
 import { NextFunction, Request, Response } from 'express'
 import { verifyAccessToken } from '../utils/jwt'
 import { UnauthorizedError } from '../errors/AppError'
-import { StaffModel } from '../../models/staff.model'
-import { DealerUserModel } from '../../models/dealerUser.model'
+import { prisma } from '../../config/database'
 
 export interface AuthenticatedStaff {
-  id: string
+  id: number
   name: string
   email: string
   role: string
   permissions: string[]
-  dealerId?: string
+  dealerId?: number
 }
 
-/** Shape embedded in the JWT payload (also used by auth.ts legacy router). */
+/** Shape embedded in the JWT payload. */
 export interface StaffPayload {
-  id: string
+  id: number
   email: string
   name: string
   role: string
@@ -38,29 +37,35 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     }
     const token = header.slice('Bearer '.length).trim()
     const payload = verifyAccessToken(token)
-
-    const role: string = (payload as unknown as Record<string, string>).role ?? 'staff'
+    const userId = Number(payload.sub)
+    const role = payload.role ?? 'staff'
 
     if (role === 'dealer') {
-      const dealerUser = await DealerUserModel.findById(payload.sub).select('name email isActive dealerId').lean()
+      const dealerUser = await prisma.dealerUser.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, isActive: true, dealerId: true },
+      })
       if (!dealerUser || !dealerUser.isActive) {
         throw new UnauthorizedError('Account is inactive or no longer exists')
       }
       req.staff = {
-        id: String(dealerUser._id),
+        id: dealerUser.id,
         name: dealerUser.name,
         email: dealerUser.email,
         role: 'dealer',
         permissions: [],
-        dealerId: String(dealerUser.dealerId),
+        dealerId: dealerUser.dealerId,
       }
     } else {
-      const staff = await StaffModel.findById(payload.sub).select('name email isActive').lean()
+      const staff = await prisma.staff.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, isActive: true },
+      })
       if (!staff || !staff.isActive) {
         throw new UnauthorizedError('Account is inactive or no longer exists')
       }
       req.staff = {
-        id: String(staff._id),
+        id: staff.id,
         name: staff.name,
         email: staff.email,
         role,

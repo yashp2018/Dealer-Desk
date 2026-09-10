@@ -3,16 +3,16 @@ import { randomBytes, createHash } from 'crypto'
 import { env } from '../../config/env'
 
 export interface AccessTokenPayload extends JwtPayload {
-  sub: string // staff or dealerUser id
+  sub: string // staff or dealerUser id, stringified
   permissions: string[]
   role?: string
-  dealerId?: string
+  dealerId?: number
 }
 
 export function signAccessToken(
-  staffId: string,
+  staffId: number,
   permissions: string[],
-  extra?: { role?: string; dealerId?: string },
+  extra?: { role?: string; dealerId?: number },
 ): { token: string; expiresIn: number } {
   const options: SignOptions = { expiresIn: env.JWT_ACCESS_EXPIRES_IN as SignOptions['expiresIn'] }
   const token = jwt.sign({ sub: String(staffId), permissions, ...extra }, env.JWT_ACCESS_SECRET, options)

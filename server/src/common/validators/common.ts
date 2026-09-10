@@ -1,14 +1,12 @@
 import { z } from 'zod'
 
-export const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid ObjectId')
-
 export const idParam = z.object({
-  id: objectId,
+  id: z.coerce.number().int().positive(),
 })
 
 export const nestedIdParams = z.object({
-  id: objectId,
-  itemId: objectId,
+  id: z.coerce.number().int().positive(),
+  itemId: z.coerce.number().int().positive(),
 })
 
 export const paginationQuery = z.object({

@@ -1,31 +1,32 @@
-import { StaffModel, RefreshTokenModel } from '../../models/staff.model'
+import { prisma } from '../../config/database'
 
 export const authRepository = {
   findByEmail(email: string) {
-    return StaffModel.findOne({ email }).lean()
+    return prisma.staff.findUnique({ where: { email } })
   },
 
-  findById(id: string) {
-    return StaffModel.findById(id).lean()
+  findById(id: number) {
+    return prisma.staff.findUnique({ where: { id } })
   },
 
-  async incrementFailedLogins(staffId: string, lockedUntil: Date | null) {
-    await StaffModel.findByIdAndUpdate(staffId, {
-      $inc: { failedLoginCount: 1 },
-      ...(lockedUntil ? { lockedUntil } : {}),
+  async incrementFailedLogins(staffId: number, lockedUntil: Date | null) {
+    await prisma.staff.update({
+      where: { id: staffId },
+      data: { failedLoginCount: { increment: 1 }, ...(lockedUntil ? { lockedUntil } : {}) },
     })
   },
 
-  async resetFailedLogins(staffId: string) {
-    await StaffModel.findByIdAndUpdate(staffId, { failedLoginCount: 0, lockedUntil: null })
+  async resetFailedLogins(staffId: number) {
+    await prisma.staff.update({ where: { id: staffId }, data: { failedLoginCount: 0, lockedUntil: null } })
   },
 
-  async updatePassword(staffId: string, passwordHash: string) {
-    await StaffModel.findByIdAndUpdate(staffId, { passwordHash })
+  async updatePassword(staffId: number, passwordHash: string) {
+    await prisma.staff.update({ where: { id: staffId }, data: { passwordHash } })
   },
 
   createRefreshToken(data: {
-    staffId: string
+    staffId?: number
+    dealerUserId?: number
     tokenHash: string
     deviceId: string
     platform: string
@@ -33,29 +34,31 @@ export const authRepository = {
     osVersion: string
     expiresAt: Date
   }) {
-    return RefreshTokenModel.create(data)
+    return prisma.refreshToken.create({ data })
   },
 
   findActiveRefreshTokenByHash(tokenHash: string) {
-    return RefreshTokenModel.findOne({
-      tokenHash,
-      revokedAt: null,
-      expiresAt: { $gt: new Date() },
-    }).lean()
-  },
-
-  async revokeRefreshToken(id: string, replacedBy?: string) {
-    await RefreshTokenModel.findByIdAndUpdate(id, {
-      revokedAt: new Date(),
-      ...(replacedBy ? { replacedBy } : {}),
+    return prisma.refreshToken.findFirst({
+      where: { tokenHash, revokedAt: null, expiresAt: { gt: new Date() } },
     })
   },
 
-  async revokeAllRefreshTokensForStaff(staffId: string) {
-    await RefreshTokenModel.updateMany({ staffId, revokedAt: null }, { revokedAt: new Date() })
+  async revokeRefreshToken(id: number, replacedBy?: string) {
+    await prisma.refreshToken.update({
+      where: { id },
+      data: { revokedAt: new Date(), ...(replacedBy ? { replacedBy } : {}) },
+    })
+  },
+
+  async revokeAllRefreshTokensForStaff(staffId: number) {
+    await prisma.refreshToken.updateMany({ where: { staffId, revokedAt: null }, data: { revokedAt: new Date() } })
+  },
+
+  async revokeAllRefreshTokensForDealerUser(dealerUserId: number) {
+    await prisma.refreshToken.updateMany({ where: { dealerUserId, revokedAt: null }, data: { revokedAt: new Date() } })
   },
 
   async revokeRefreshTokenByHash(tokenHash: string) {
-    await RefreshTokenModel.updateMany({ tokenHash, revokedAt: null }, { revokedAt: new Date() })
+    await prisma.refreshToken.updateMany({ where: { tokenHash, revokedAt: null }, data: { revokedAt: new Date() } })
   },
 }
