@@ -130,10 +130,18 @@ describe('prospect ownership scoping', () => {
 })
 
 describe('POST /api/v1/prospects — owner assignment', () => {
-  const base = () => ({ company_name: `Owner Assignment Test ${Date.now()}` })
+  const names = ['Owner Assignment Test — default', 'Owner Assignment Test — spoofed', 'Owner Assignment Test — honored']
+  const base = (company_name: string) => ({ company_name })
+
+  beforeAll(async () => {
+    // Each test below POSTs through the real create endpoint (not an
+    // upsert), so a fresh row would otherwise pile up on every test run —
+    // clear last run's rows first, same fix dealers.test.ts already uses.
+    await prisma.prospect.deleteMany({ where: { companyName: { in: names } } })
+  })
 
   it('defaults to the creator when no owner is given (view_own-only staff can only submit their own owner_staff_id anyway)', async () => {
-    const res = await request(app).post('/api/v1/prospects').set('Authorization', `Bearer ${limitedToken}`).send({ ...base(), owner_staff_id: limitedStaffId })
+    const res = await request(app).post('/api/v1/prospects').set('Authorization', `Bearer ${limitedToken}`).send({ ...base(names[0]), owner_staff_id: limitedStaffId })
     expect(res.status).toBe(201)
     expect(res.body.data.owner_staff_id).toBe(limitedStaffId)
   })
@@ -142,7 +150,7 @@ describe('POST /api/v1/prospects — owner assignment', () => {
     const res = await request(app)
       .post('/api/v1/prospects')
       .set('Authorization', `Bearer ${limitedToken}`)
-      .send({ ...base(), owner_staff_id: testStaffId })
+      .send({ ...base(names[1]), owner_staff_id: testStaffId })
     expect(res.status).toBe(201)
     expect(res.body.data.owner_staff_id).toBe(limitedStaffId)
     expect(res.body.data.owner_staff_id).not.toBe(testStaffId)
@@ -152,7 +160,7 @@ describe('POST /api/v1/prospects — owner assignment', () => {
     const res = await request(app)
       .post('/api/v1/prospects')
       .set('Authorization', `Bearer ${token}`)
-      .send({ ...base(), owner_staff_id: limitedStaffId })
+      .send({ ...base(names[2]), owner_staff_id: limitedStaffId })
     expect(res.status).toBe(201)
     expect(res.body.data.owner_staff_id).toBe(limitedStaffId)
   })

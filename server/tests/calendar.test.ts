@@ -63,6 +63,12 @@ beforeAll(async () => {
     os_version: 'test',
   })
   limitedToken = limitedRes.body.data.token
+
+  // This file POSTs a real calendar activity in nearly every test, none of
+  // them upserts — only this file ever creates activities owned by these
+  // two test accounts, so it's safe to sweep them all before each run
+  // rather than let them pile up indefinitely.
+  await prisma.calendarActivity.deleteMany({ where: { ownerStaffId: { in: [testStaffId, limitedStaffId] } } })
 })
 
 const basePayload = {
