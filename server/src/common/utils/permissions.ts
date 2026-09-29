@@ -14,3 +14,10 @@ export async function getStaffPermissions(staffId: number): Promise<string[]> {
   }
   return Array.from(permissionKeys)
 }
+
+export async function hasAdminRole(staffId: number): Promise<boolean> {
+  const adminRole = await prisma.staffRole.findFirst({
+    where: { staffId, role: { key: 'admin' } },
+  })
+  return adminRole !== null
+}

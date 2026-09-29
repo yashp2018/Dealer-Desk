@@ -1,10 +1,10 @@
 import { prisma } from '../../config/database'
 import { requestRepository } from './request.repository'
-import { toRequestDto, toDealerRequestDto } from './request.mapper'
+import { toRequestDto, toDealerRequestDto, toDealerStatusLabel, toRequestDetailsDto } from './request.mapper'
 import { nextRefNo } from '../../common/utils/sequence'
 import { recordTimelineEvent } from '../../common/utils/timeline'
 import { BadRequestError, InvalidTransitionError, NotFoundError } from '../../common/errors/AppError'
-import { CreateRequestInput, DealerCreateRequestInput } from './request.validation'
+import { CreateRequestInput, DealerCreateRequestInput, toFieldGroups } from './request.validation'
 
 async function getAllowedTransitions(): Promise<Record<string, string[]>> {
   const config = await prisma.appConfig.findUnique({ where: { key: 'status_transitions' } })
@@ -15,19 +15,27 @@ async function getAllowedTransitions(): Promise<Record<string, string[]>> {
 }
 
 export const requestService = {
-  async list(params: {
-    skip: number
-    take: number
-    q?: string
-    status?: string
-    priority?: number
-    dealerId?: number
-    ownerStaffId?: number
-    typeId?: number
-    startDate?: string
-    endDate?: string
-  }) {
-    const { requests, total } = await requestRepository.findMany(params)
+  async list(
+    params: {
+      skip: number
+      take: number
+      q?: string
+      status?: string
+      priority?: number
+      dealerId?: number
+      ownerStaffId?: number
+      typeId?: number
+      startDate?: string
+      endDate?: string
+    },
+    actor: { id: number; permissions: string[] },
+  ) {
+    const canViewAll = actor.permissions.includes('*') || actor.permissions.includes('requests.view_all')
+    // A view_own-only staff member can never widen their own results by
+    // passing a different owner_staff_id — their effective scope is always
+    // just themselves, regardless of what the query string asks for.
+    const scopedParams = canViewAll ? params : { ...params, ownerStaffId: actor.id }
+    const { requests, total } = await requestRepository.findMany(scopedParams)
     return { requests: requests.map(toRequestDto), total }
   },
 
@@ -52,7 +60,13 @@ export const requestService = {
     return requestRepository.timeline(id)
   },
 
-  async create(input: CreateRequestInput, actorStaffId: number) {
+  async escalations(id: number) {
+    await this.getOrThrow(id)
+    return requestRepository.escalations(id)
+  },
+
+  async create(input: CreateRequestInput, actor: { id: number; permissions: string[] }) {
+    const actorStaffId = actor.id
     if (input.client_uuid) {
       const existing = await requestRepository.findByClientUuid(input.client_uuid)
       if (existing) return toRequestDto(existing)
@@ -67,6 +81,14 @@ export const requestService = {
     const priority = input.priority ?? type.defaultPriority
     const dueAt = new Date(Date.now() + type.slaHours * 60 * 60 * 1000)
 
+    // Unlike Dealers, a Request can legitimately be created with no owner at
+    // all — the Control Room's "Unassigned" queue depends on that. What we
+    // guard against is *whose* id lands here: only requests.view_all can
+    // hand a new request to someone else; anyone else creating one can only
+    // leave it unassigned or claim it for themselves.
+    const canAssignOthers = actor.permissions.includes('*') || actor.permissions.includes('requests.view_all')
+    const ownerStaffId = input.owner_staff_id ? (canAssignOthers ? input.owner_staff_id : actor.id) : null
+
     const request = await prisma.$transaction(async (tx) => {
       const refNo = await nextRefNo('REQ', tx)
       const created = await tx.request.create({
@@ -76,7 +98,7 @@ export const requestService = {
           description: input.description,
           typeId: input.type_id,
           dealerId: input.dealer_id,
-          ownerStaffId: input.owner_staff_id ?? null,
+          ownerStaffId,
           priority,
           scheduledAt: input.scheduled_at ? new Date(input.scheduled_at) : null,
           dueAt,
@@ -85,13 +107,28 @@ export const requestService = {
         },
       })
 
-      if (input.fields) {
+      const fieldGroups = toFieldGroups(input.fields)
+      if (fieldGroups.length > 0) {
         await tx.requestFieldValue.createMany({
-          data: Object.entries(input.fields).map(([key, value]) => ({ requestId: created.id, key, value })),
+          data: fieldGroups.flatMap((group, groupIndex) =>
+            Object.entries(group).map(([key, value]) => ({ requestId: created.id, groupIndex, key, value })),
+          ),
         })
       }
 
-      await recordTimelineEvent({ entityType: 'request', entityId: created.id, eventType: 'created', summary: `Request ${refNo} created`, actorStaffId }, tx)
+      if (input.lines && input.lines.length > 0) {
+        await tx.requestLine.createMany({
+          data: input.lines.map((l) => ({
+            requestId: created.id,
+            description: l.description,
+            qty: l.qty,
+            unitRate: l.unit_rate ?? null,
+            total: l.unit_rate !== undefined ? l.qty * l.unit_rate : null,
+          })),
+        })
+      }
+
+      await recordTimelineEvent({ entityType: 'request', entityId: created.id, eventType: 'created', summary: `Request ${refNo} created${input.lines?.length ? ` with ${input.lines.length} item${input.lines.length === 1 ? '' : 's'}` : ''}`, actorStaffId }, tx)
       return created
     })
 
@@ -100,7 +137,7 @@ export const requestService = {
   },
 
   /** Dealer portal request creation — dealerId is forced from authenticated user. */
-  async createForDealer(input: DealerCreateRequestInput, dealerId: number, actorStaffId: number) {
+  async createForDealer(input: DealerCreateRequestInput, dealerId: number) {
     if (input.client_uuid) {
       const existing = await requestRepository.findByClientUuid(input.client_uuid)
       if (existing && existing.dealerId === dealerId) return toDealerRequestDto(existing)
@@ -112,7 +149,8 @@ export const requestService = {
     const dealer = await prisma.dealer.findUnique({ where: { id: dealerId } })
     if (!dealer) throw new BadRequestError('Dealer not found')
 
-    const priority = input.priority ?? type.defaultPriority
+    // No input.priority here by design — dealers never set internal priority (see dealerCreateRequestSchema).
+    const priority = type.defaultPriority
     const dueAt = new Date(Date.now() + type.slaHours * 60 * 60 * 1000)
 
     const request = await prisma.$transaction(async (tx) => {
@@ -132,25 +170,46 @@ export const requestService = {
         },
       })
 
-      if (input.fields) {
+      const fieldGroups = toFieldGroups(input.fields)
+      if (fieldGroups.length > 0) {
         await tx.requestFieldValue.createMany({
-          data: Object.entries(input.fields).map(([key, value]) => ({ requestId: created.id, key, value })),
+          data: fieldGroups.flatMap((group, groupIndex) =>
+            Object.entries(group).map(([key, value]) => ({ requestId: created.id, groupIndex, key, value })),
+          ),
         })
       }
 
-      await recordTimelineEvent({ entityType: 'request', entityId: created.id, eventType: 'created', summary: `Request ${refNo} created by dealer`, actorStaffId }, tx)
+      if (input.lines && input.lines.length > 0) {
+        await tx.requestLine.createMany({
+          data: input.lines.map((l) => ({
+            requestId: created.id,
+            description: l.description,
+            qty: l.qty,
+            unitRate: l.unit_rate ?? null,
+            total: l.unit_rate !== undefined ? l.qty * l.unit_rate : null,
+          })),
+        })
+      }
+
+      // actorStaffId intentionally omitted — the actor here is a DealerUser,
+      // not a Staff row, and TimelineEntry.actorStaffId is a real FK to
+      // staff. Passing a dealer-portal id through it risked either a foreign
+      // key violation or (worse) silently attributing the event to whichever
+      // staff member happened to share that numeric id.
+      await recordTimelineEvent({ entityType: 'request', entityId: created.id, eventType: 'created', summary: `Request ${refNo} created by dealer${input.lines?.length ? ` with ${input.lines.length} item${input.lines.length === 1 ? '' : 's'}` : ''}`, actorStaffId: null }, tx)
       return created
     })
 
     // Notify admins/staff
+    const itemsSuffix = input.lines?.length ? ` (${input.lines.length} item${input.lines.length === 1 ? '' : 's'})` : ''
     const activeStaff = await prisma.staff.findMany({ where: { isActive: true }, select: { id: true } })
     if (activeStaff.length > 0) {
       await prisma.notification.createMany({
         data: activeStaff.map((s) => ({
           staffId: s.id,
           title: 'New Dealer Request',
-          body: `${dealer.name} submitted ${request.refNo}`,
-          message: `${dealer.name} submitted ${request.refNo}: ${input.title ?? type.name}`,
+          body: `${dealer.name} submitted ${request.refNo}${itemsSuffix}`,
+          message: `${dealer.name} submitted ${request.refNo}: ${input.title ?? type.name}${itemsSuffix}`,
           linkUrl: `/requests/${request.id}`,
           isRead: false,
         })),
@@ -173,6 +232,19 @@ export const requestService = {
     await recordTimelineEvent({ entityType: 'request', entityId: id, eventType: 'status_changed', summary: `Status changed to "${status}"`, actorStaffId })
 
     const updated = await requestRepository.findById(id)
+    if (updated?.dealerId) {
+      const label = toDealerStatusLabel(status)
+      await prisma.notification.create({
+        data: {
+          dealerId: updated.dealerId,
+          title: 'Request Update',
+          body: `${updated.refNo} is now ${label}`,
+          message: `Your request ${updated.refNo} (${updated.title}) is now ${label}`,
+          linkUrl: `/portal/requests/${updated.id}`,
+          isRead: false,
+        },
+      })
+    }
     return toRequestDto(updated!)
   },
 
@@ -242,10 +314,35 @@ export const requestService = {
     return toRequestDto(updated!)
   },
 
-  async saveDetails(id: number, fields: Record<string, string>) {
+  async saveDetails(id: number, fields: Record<string, string> | Record<string, string>[]) {
     await this.getOrThrow(id)
-    await requestRepository.upsertFields(id, fields)
+    const groups = toFieldGroups(fields)
+    await Promise.all(groups.map((group, groupIndex) => requestRepository.upsertFields(id, group, groupIndex)))
     const all = await requestRepository.fields(id)
-    return { request_id: id, fields: Object.fromEntries(all.map((f) => [f.key, f.value])) }
+    return toRequestDetailsDto(id, all)
+  },
+
+  /**
+   * Hard delete — admin-only (see requests.delete in the permission seed).
+   * Field values, lines, and escalation logs cascade with the row (see the
+   * Prisma relations); the request's own timeline entries are a loose
+   * entityType/entityId reference with no FK, so they're left behind rather
+   * than silently rewritten — same tradeoff every other loose-reference
+   * table in this app already accepts. The deletion itself is instead logged
+   * onto the dealer's timeline, if there is one, so the fact something was
+   * removed survives even though the request's own history doesn't.
+   */
+  async remove(id: number, actorStaffId: number) {
+    const request = await this.getOrThrow(id)
+    await requestRepository.delete(id)
+    if (request.dealerId) {
+      await recordTimelineEvent({
+        entityType: 'dealer',
+        entityId: request.dealerId,
+        eventType: 'request_deleted',
+        summary: `Request ${request.refNo} (${request.title}) was deleted`,
+        actorStaffId,
+      })
+    }
   },
 }

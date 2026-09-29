@@ -48,15 +48,15 @@ export const requestRepository = {
   },
 
   fields(requestId: number) {
-    return prisma.requestFieldValue.findMany({ where: { requestId } })
+    return prisma.requestFieldValue.findMany({ where: { requestId }, orderBy: [{ groupIndex: 'asc' }, { id: 'asc' }] })
   },
 
-  async upsertFields(requestId: number, fields: Record<string, string>) {
+  async upsertFields(requestId: number, fields: Record<string, string>, groupIndex = 0) {
     await Promise.all(
       Object.entries(fields).map(([key, value]) =>
         prisma.requestFieldValue.upsert({
-          where: { requestId_key: { requestId, key } },
-          create: { requestId, key, value },
+          where: { requestId_key_groupIndex: { requestId, key, groupIndex } },
+          create: { requestId, groupIndex, key, value },
           update: { value },
         }),
       ),
@@ -73,5 +73,17 @@ export const requestRepository = {
       include: { actor: true },
       orderBy: { createdAt: 'desc' },
     })
+  },
+
+  escalations(requestId: number) {
+    return prisma.escalationLog.findMany({
+      where: { requestId },
+      include: { rule: { select: { name: true } } },
+      orderBy: { firedAt: 'desc' },
+    })
+  },
+
+  delete(id: number) {
+    return prisma.request.delete({ where: { id } })
   },
 }

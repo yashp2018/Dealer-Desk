@@ -1,26 +1,27 @@
 import { z } from 'zod'
+import { phoneString } from '../../common/validators/common'
 
 const contactSchema = z.object({
-  phone: z.string().optional(),
-  email: z.string().email('Contact email must be a valid email address.').optional(),
-  website: z.string().url('Contact website must be a valid URL.').optional(),
+  phone: phoneString,
+  email: z.string().email('Contact email must be a valid email address.').max(191).optional(),
+  website: z.string().url('Contact website must be a valid URL.').max(191).optional(),
 })
 
 const addressSchema = z.object({
-  country: z.string().optional(),
-  state: z.string().optional(),
-  city: z.string().optional(),
-  address: z.string().optional(),
-  postalCode: z.string().optional(),
+  country: z.string().max(191).optional(),
+  state: z.string().max(191).optional(),
+  city: z.string().max(191).optional(),
+  address: z.string().max(191).optional(),
+  postalCode: z.string().max(191).optional(),
 })
 
 export const createProviderSchema = z.object({
-  name: z.string().trim().min(1, 'Provider name is required.'),
-  providerCode: z.string().trim().regex(/^[a-zA-Z0-9]+$/, 'Provider code must be alphanumeric.').optional(),
-  slug: z.string().trim().regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only.').optional(),
-  logo: z.string().optional(),
-  coverImage: z.string().optional(),
-  shortDescription: z.string().optional(),
+  name: z.string().trim().min(1, 'Provider name is required.').max(191),
+  providerCode: z.string().trim().max(191).regex(/^[a-zA-Z0-9]+$/, 'Provider code must be alphanumeric.').optional(),
+  slug: z.string().trim().max(191).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only.').optional(),
+  logo: z.string().url('Logo must be a valid URL.').max(191).optional(),
+  coverImage: z.string().url('Cover image must be a valid URL.').max(191).optional(),
+  shortDescription: z.string().max(191).optional(),
   description: z.string().optional(),
   contact: contactSchema.optional(),
   address: addressSchema.optional(),

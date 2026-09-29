@@ -56,4 +56,24 @@ export const visitRepository = {
       orderBy: { createdAt: 'desc' },
     })
   },
+
+  listAttachments(visitId: number) {
+    return prisma.visitAttachment.findMany({
+      where: { visitId },
+      include: { uploadedBy: true },
+      orderBy: { createdAt: 'desc' },
+    })
+  },
+
+  findAttachment(visitId: number, attachmentId: number) {
+    return prisma.visitAttachment.findFirst({ where: { id: attachmentId, visitId }, include: { uploadedBy: true } })
+  },
+
+  createAttachment(data: Prisma.VisitAttachmentUncheckedCreateInput) {
+    return prisma.visitAttachment.create({ data, include: { uploadedBy: true } })
+  },
+
+  deleteAttachment(attachmentId: number) {
+    return prisma.visitAttachment.delete({ where: { id: attachmentId } })
+  },
 }

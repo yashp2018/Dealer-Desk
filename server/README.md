@@ -37,12 +37,38 @@ cp .env.example .env   # then fill in real secrets + DATABASE_URL
 
 ## 3. Database setup (MySQL)
 
-```bash
-# Create the database (adjust for your MySQL setup)
-mysql -u root -p -e "CREATE DATABASE dealer_desk CHARACTER SET utf8mb4;"
+### One-shot bootstrap (recommended)
 
-# Apply the schema
-npx prisma migrate dev --name init
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup-db.ps1
+```
+
+Idempotent — safe to re-run any time. On a machine with nothing set up yet it
+will: initialize a MySQL data directory, start `mysqld`, create the
+`dealer_desk` database and `dealerdesk` user, apply every Prisma migration,
+and seed development data. On a machine that already has all of this, every
+step just verifies and no-ops.
+
+This is written for this project's actual dev setup on Windows: MySQL
+installed via `winget install Oracle.MySQL` **without admin rights**, so it
+can't run as a real Windows service — it runs standalone, started on demand
+(see `scripts/start-mysql.ps1`, wired into `predev` in `package.json` so
+`npm run dev` always brings it up first). If you're on a machine with MySQL
+already running as a normal service, skip the script and do the manual
+steps below instead.
+
+### Manual steps (any MySQL install)
+
+```bash
+# Create the database + app user (adjust host/user/pass for your setup)
+mysql -u root -p -e "
+  CREATE DATABASE dealer_desk CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  CREATE USER 'dealerdesk'@'localhost' IDENTIFIED BY 'dealerdesk';
+  GRANT ALL PRIVILEGES ON dealer_desk.* TO 'dealerdesk'@'localhost';
+"
+
+# Apply the schema (all committed migrations, no prompts)
+npx prisma migrate deploy
 
 # Seed development master data + a dev admin account
 npm run seed

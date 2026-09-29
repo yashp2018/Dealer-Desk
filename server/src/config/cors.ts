@@ -14,6 +14,6 @@ export const corsOptions: CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'If-None-Match', 'Idempotency-Key', 'X-Request-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'If-None-Match', 'Idempotency-Key', 'X-Request-Id', 'X-CSRF-Token'],
   exposedHeaders: ['ETag', 'X-Request-Id'],
 }

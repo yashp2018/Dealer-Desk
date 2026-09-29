@@ -78,6 +78,14 @@ export const dealerRepository = {
     return withCounts
   },
 
+  create(data: Prisma.DealerCreateInput) {
+    return prisma.dealer.create({ data, include: { tier: true, territory: true } })
+  },
+
+  findByName(name: string) {
+    return prisma.dealer.findFirst({ where: { name } })
+  },
+
   update(id: number, data: Prisma.DealerUpdateInput) {
     return prisma.dealer.update({ where: { id }, data, include: { tier: true, territory: true } })
   },
@@ -130,6 +138,40 @@ export const dealerRepository = {
       where: { entityType: 'dealer', entityId: dealerId },
       include: { actor: true },
       orderBy: { createdAt: 'desc' },
+    })
+  },
+
+  findAllNames() {
+    return prisma.dealer.findMany({ select: { name: true } })
+  },
+
+  findPendingCandidateNames() {
+    return prisma.dealerImportCandidate.findMany({ where: { status: 'pending' }, select: { name: true } })
+  },
+
+  createImportCandidates(rows: Prisma.DealerImportCandidateCreateManyInput[]) {
+    return prisma.dealerImportCandidate.createMany({ data: rows })
+  },
+
+  listPendingCandidates(q?: string) {
+    return prisma.dealerImportCandidate.findMany({
+      where: {
+        status: 'pending',
+        ...(q ? { name: { contains: q } } : {}),
+      },
+      orderBy: { name: 'asc' },
+      take: 500,
+    })
+  },
+
+  findCandidateById(id: number) {
+    return prisma.dealerImportCandidate.findUnique({ where: { id } })
+  },
+
+  markCandidateUsed(id: number, dealerId: number) {
+    return prisma.dealerImportCandidate.update({
+      where: { id },
+      data: { status: 'used', usedDealerId: dealerId, usedAt: new Date() },
     })
   },
 }

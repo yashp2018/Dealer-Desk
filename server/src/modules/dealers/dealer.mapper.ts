@@ -1,4 +1,4 @@
-import { Dealer, DealerContact, Tier, Territory } from '@prisma/client'
+import { Dealer, DealerContact, DealerImportCandidate, Tier, Territory } from '@prisma/client'
 
 export type DealerWithRelations = Dealer & {
   tier: Tier
@@ -57,5 +57,15 @@ export function toDealerContactDto(c: DealerContact) {
     phone: c.phone,
     email: c.email,
     is_primary: c.isPrimary,
+  }
+}
+
+export function toImportCandidateDto(c: DealerImportCandidate) {
+  return {
+    id: c.id,
+    name: c.name,
+    city: c.city,
+    phone_primary: c.phonePrimary,
+    state_normalized: c.stateNormalized,
   }
 }

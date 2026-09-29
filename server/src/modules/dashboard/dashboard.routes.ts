@@ -61,35 +61,42 @@ dashboardRouter.get(
 
 dashboardRouter.get(
   '/queue',
-  asyncHandler(async (_req: Request, res: Response) => {
+  asyncHandler(async (req: Request, res: Response) => {
+    const canViewAllRequests = req.staff!.permissions.includes('*') || req.staff!.permissions.includes('requests.view_all')
+    const ownerScope = canViewAllRequests ? {} : { ownerStaffId: req.staff!.id }
+
     const now = new Date()
     const startOfToday = startOfDay()
     const endOfToday = endOfDay()
     const startOfThisWeek = startOfWeek()
 
-    const [openRequests, breached, dueToday, open, waiting, doneThisWeek, staffList] = await Promise.all([
-      prisma.request.findMany({ where: { status: { notIn: OPEN_STATUSES_NOT_IN } }, include: requestInclude, orderBy: { priority: 'asc' }, take: 200 }),
-      prisma.request.count({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { lt: now } } }),
-      prisma.request.count({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { gte: startOfToday, lte: endOfToday } } }),
-      prisma.request.count({ where: { status: { notIn: OPEN_STATUSES_NOT_IN } } }),
-      prisma.request.count({ where: { status: { in: ['waiting_dealer', 'waiting_internal'] } } }),
-      prisma.request.count({ where: { status: 'done', doneAt: { gte: startOfThisWeek } } }),
-      prisma.staff.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+    const [openRequests, breached, dueToday, open, waiting, doneThisWeek] = await Promise.all([
+      prisma.request.findMany({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, ...ownerScope }, include: requestInclude, orderBy: { priority: 'asc' }, take: 200 }),
+      prisma.request.count({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { lt: now }, ...ownerScope } }),
+      prisma.request.count({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { gte: startOfToday, lte: endOfToday }, ...ownerScope } }),
+      prisma.request.count({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, ...ownerScope } }),
+      prisma.request.count({ where: { status: { in: ['waiting_dealer', 'waiting_internal'] }, ...ownerScope } }),
+      prisma.request.count({ where: { status: 'done', doneAt: { gte: startOfThisWeek }, ...ownerScope } }),
     ])
 
     const unassigned = openRequests.filter((r) => !r.ownerStaffId).length
     const unscheduled = openRequests.filter((r) => !r.scheduledAt).length
     const incomplete = openRequests.filter((r) => r.completionDone < r.completionRequired).length
 
-    const team = await Promise.all(
-      staffList.map(async (s) => {
-        const [openCount, overdueCount] = await Promise.all([
-          prisma.request.count({ where: { ownerStaffId: s.id, status: { notIn: OPEN_STATUSES_NOT_IN } } }),
-          prisma.request.count({ where: { ownerStaffId: s.id, status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { lt: now } } }),
-        ])
-        return { staffid: s.id, name: s.name, open_count: openCount, overdue_count: overdueCount }
-      }),
-    )
+    // The per-staff leaderboard names every teammate and their individual
+    // open/overdue counts — only visible to someone who could already see
+    // everyone's requests via requests.view_all, not a plain view_own caller.
+    const team = canViewAllRequests
+      ? await Promise.all(
+          (await prisma.staff.findMany({ where: { isActive: true }, select: { id: true, name: true } })).map(async (s) => {
+            const [openCount, overdueCount] = await Promise.all([
+              prisma.request.count({ where: { ownerStaffId: s.id, status: { notIn: OPEN_STATUSES_NOT_IN } } }),
+              prisma.request.count({ where: { ownerStaffId: s.id, status: { notIn: OPEN_STATUSES_NOT_IN }, dueAt: { lt: now } } }),
+            ])
+            return { staffid: s.id, name: s.name, open_count: openCount, overdue_count: overdueCount }
+          }),
+        )
+      : []
 
     ok(res, {
       requests: openRequests.map(toRequestDto),
@@ -102,23 +109,35 @@ dashboardRouter.get(
 
 dashboardRouter.get(
   '/dashboard',
-  asyncHandler(async (_req: Request, res: Response) => {
+  asyncHandler(async (req: Request, res: Response) => {
+    const perms = req.staff!.permissions
+    const canViewAllRequests = perms.includes('*') || perms.includes('requests.view_all')
+    const canViewAllDealers = perms.includes('*') || perms.includes('dealers.view_all')
+    const canViewAllProspects = perms.includes('*') || perms.includes('prospects.view_all')
+    const canViewAllVisits = perms.includes('*') || perms.includes('visits.view_all')
+    const requestOwnerScope = canViewAllRequests ? {} : { ownerStaffId: req.staff!.id }
+    const dealerOwnerScope = canViewAllDealers ? {} : { ownerStaffId: req.staff!.id }
+    const prospectOwnerScope = canViewAllProspects ? {} : { ownerStaffId: req.staff!.id }
+    const visitOwnerScope = canViewAllVisits ? {} : { ownerStaffId: req.staff!.id }
+
     const now = new Date()
     const startOfToday = startOfDay()
     const endOfToday = endOfDay()
 
-    const activeRequests = await prisma.request.findMany({ where: { status: { notIn: OPEN_STATUSES_NOT_IN } }, include: requestInclude })
+    const activeRequests = await prisma.request.findMany({ where: { status: { notIn: OPEN_STATUSES_NOT_IN }, ...requestOwnerScope }, include: requestInclude })
     const openCount = activeRequests.length
     const p1p2 = activeRequests.filter((r) => (r.priorityOverride ?? r.priority) <= 2).length
     const breached = activeRequests.filter((r) => isOverdue(r)).length
     const unassigned = activeRequests.filter((r) => !r.ownerStaffId).length
 
     const [visitsToday, dealers, prospects, visits, team] = await Promise.all([
-      prisma.visit.count({ where: { scheduledAt: { gte: startOfToday, lte: endOfToday } } }),
-      prisma.dealer.findMany({ select: { id: true, health: true, territoryId: true, territory: { select: { name: true } } } }),
-      prisma.prospect.findMany({ select: { stage: true } }),
-      prisma.visit.findMany({ select: { status: true } }),
-      prisma.staff.findMany({ where: { isActive: true }, select: { id: true, name: true } }),
+      prisma.visit.count({ where: { scheduledAt: { gte: startOfToday, lte: endOfToday }, ...visitOwnerScope } }),
+      prisma.dealer.findMany({ where: dealerOwnerScope, select: { id: true, health: true, territoryId: true, territory: { select: { name: true } } } }),
+      prisma.prospect.findMany({ where: prospectOwnerScope, select: { stage: true } }),
+      prisma.visit.findMany({ where: visitOwnerScope, select: { status: true } }),
+      // The per-staff leaderboard below only makes sense — and is only
+      // shown — to a caller who can already see everyone's requests.
+      canViewAllRequests ? prisma.staff.findMany({ where: { isActive: true }, select: { id: true, name: true } }) : Promise.resolve([]),
     ])
 
     const prospectsFollowup = prospects.filter((p) => ['contacted', 'qualified', 'visit_planned'].includes(p.stage)).length
@@ -132,8 +151,8 @@ dashboardRouter.get(
         const from = startOfDay(day)
         const to = endOfDay(day)
         const [createdCount, doneCount] = await Promise.all([
-          prisma.request.count({ where: { createdAt: { gte: from, lte: to } } }),
-          prisma.request.count({ where: { doneAt: { gte: from, lte: to } } }),
+          prisma.request.count({ where: { createdAt: { gte: from, lte: to }, ...requestOwnerScope } }),
+          prisma.request.count({ where: { doneAt: { gte: from, lte: to }, ...requestOwnerScope } }),
         ])
         return { day: day.toLocaleDateString('en-US', { weekday: 'short' }), new: createdCount, done: doneCount }
       }),

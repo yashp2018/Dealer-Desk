@@ -3,7 +3,7 @@ import { prisma } from '../../config/database'
 
 type TxClient = Prisma.TransactionClient
 
-export type TimelineEntityType = 'dealer' | 'prospect' | 'request' | 'visit'
+export type TimelineEntityType = 'dealer' | 'prospect' | 'request' | 'visit' | 'calendar_activity'
 
 export async function recordTimelineEvent(
   params: {

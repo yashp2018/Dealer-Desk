@@ -8,17 +8,42 @@ export let testStaffId: number
 beforeAll(async () => {
   await prisma.$queryRaw`SELECT 1` // fail fast with a clear error if DATABASE_URL isn't a reachable test DB
 
-  const permission = await prisma.permission.upsert({
-    where: { key: 'dealers.view_all' },
-    create: { key: 'dealers.view_all', label: 'View all dealers' },
-    update: {},
-  })
+  const permissionKeys = [
+    'dealers.view_all',
+    'dealers.create',
+    'requests.view_all',
+    'requests.create',
+    'visits.view_all',
+    'visits.create',
+    'prospects.view_all',
+    'prospects.create',
+    'services.view_all',
+    'services.create',
+    'services.edit',
+    'services.delete',
+    'providers.view_all',
+    'providers.create',
+    'providers.edit',
+    'providers.delete',
+    'calendar.view_own',
+    'calendar.view_all',
+    'calendar.create',
+    'calendar.edit',
+    'calendar.delete',
+  ]
+  const permissions = await Promise.all(
+    permissionKeys.map((key) => prisma.permission.upsert({ where: { key }, create: { key, label: key }, update: {} })),
+  )
   const role = await prisma.role.upsert({ where: { key: 'test_role' }, create: { key: 'test_role', name: 'Test Role' }, update: {} })
-  await prisma.rolePermission.upsert({
-    where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
-    create: { roleId: role.id, permissionId: permission.id },
-    update: {},
-  })
+  await Promise.all(
+    permissions.map((permission) =>
+      prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+        create: { roleId: role.id, permissionId: permission.id },
+        update: {},
+      }),
+    ),
+  )
 
   const staff = await prisma.staff.upsert({
     where: { email: 'test.user@dealer.com' },

@@ -29,6 +29,23 @@ const envSchema = z.object({
   ERP_BASE_URL: z.string().optional().default(''),
   ERP_API_KEY: z.string().optional().default(''),
 
+  // Google Sign-In. Leave unset to keep /auth/google disabled — it returns a
+  // clear "not configured" error rather than crashing. Create this in
+  // Google Cloud Console > APIs & Services > Credentials > OAuth client ID
+  // (type "Web application", authorized JavaScript origin = your frontend URL).
+  GOOGLE_CLIENT_ID: z.string().optional().default(''),
+
+  // Password-reset OTP. Dev-mode only — see mailer.ts. A real deployment
+  // must set OTP_DELIVERY=email with real SMTP/provider credentials before
+  // going live; until then the OTP is only ever printed to the server log.
+  OTP_DELIVERY: z.enum(['console', 'email']).default('console'),
+  OTP_EXPIRES_MINUTES: z.coerce.number().int().positive().default(10),
+  OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+
+  // How often the escalation-rule engine sweeps open requests. The first
+  // scheduled job in the app — a plain setInterval, no queue infrastructure.
+  ESCALATION_JOB_INTERVAL_MINUTES: z.coerce.number().int().positive().default(15),
+
   VOICE_MAX_SECONDS: z.coerce.number().int().positive().default(120),
   RECENT_DEALERS_COUNT: z.coerce.number().int().positive().default(10),
   SYNC_BATCH_MAX: z.coerce.number().int().positive().default(50),

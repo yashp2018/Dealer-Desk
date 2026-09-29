@@ -10,6 +10,7 @@ import { ServiceListQuery } from './service.types'
 
 const includeProvider = {
   provider: { select: { id: true, name: true, logo: true, verificationStatus: true, status: true } },
+  category: { select: { id: true, name: true, slug: true } },
 } satisfies Prisma.ServiceInclude
 
 export async function findServices(query: ServiceListQuery) {

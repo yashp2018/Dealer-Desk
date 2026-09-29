@@ -13,6 +13,7 @@
  */
 
 import { Prisma } from '@prisma/client'
+import { prisma } from '../../config/database'
 import { AppError } from '../../common/errors/AppError'
 import { nextRefNo } from '../../common/utils/sequence'
 import {
@@ -29,6 +30,11 @@ import {
 import { toServiceDto } from './service.mapper'
 import { CreateServiceDto, UpdateServiceDto, ServiceListQuery } from './service.types'
 
+async function assertCategoryExists(categoryId: number) {
+  const category = await prisma.serviceCategory.findUnique({ where: { id: categoryId } })
+  if (!category) throw AppError.badRequest('Unknown service category.')
+}
+
 function toSlug(name: string): string {
   return name
     .toLowerCase()
@@ -43,8 +49,7 @@ function toCreateData(dto: CreateServiceDto, serviceCode: string, slug: string, 
     serviceCode,
     name: dto.name,
     slug,
-    categoryId: dto.categoryId,
-    categoryName: dto.categoryName,
+    category: dto.categoryId ? { connect: { id: dto.categoryId } } : undefined,
     shortDescription: dto.shortDescription,
     description: dto.description,
     images: dto.images ?? [],
@@ -79,8 +84,7 @@ function toUpdateData(dto: UpdateServiceDto, slug?: string): Prisma.ServiceUpdat
   return {
     ...(dto.name !== undefined ? { name: dto.name } : {}),
     ...(slug !== undefined ? { slug } : {}),
-    ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
-    ...(dto.categoryName !== undefined ? { categoryName: dto.categoryName } : {}),
+    ...(dto.categoryId !== undefined ? { category: dto.categoryId ? { connect: { id: dto.categoryId } } : { disconnect: true } } : {}),
     ...(dto.shortDescription !== undefined ? { shortDescription: dto.shortDescription } : {}),
     ...(dto.description !== undefined ? { description: dto.description } : {}),
     ...(dto.images !== undefined ? { images: dto.images } : {}),
@@ -158,6 +162,8 @@ export async function createNewService(dto: CreateServiceDto, createdBy?: number
     throw AppError.badRequest('A service cannot be set to active without an assigned provider.')
   }
 
+  if (dto.categoryId) await assertCategoryExists(dto.categoryId)
+
   const created = await repoCreate(toCreateData(dto, serviceCode, slug, createdBy))
   return toServiceDto(created)
 }
@@ -192,6 +198,8 @@ export async function updateExistingService(id: number, dto: UpdateServiceDto, r
     }
     slug = dto.slug
   }
+
+  if (dto.categoryId) await assertCategoryExists(dto.categoryId)
 
   const updated = await repoUpdate(id, toUpdateData(dto, slug))
   return toServiceDto(updated)

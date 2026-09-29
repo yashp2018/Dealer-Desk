@@ -10,10 +10,11 @@ import bcrypt from 'bcryptjs'
 const prisma = new PrismaClient()
 
 const PERMISSIONS = [
-  'dealers.view_own', 'dealers.view_all', 'dealers.edit', 'dealers.delete',
+  'dealers.view_own', 'dealers.view_all', 'dealers.create', 'dealers.edit', 'dealers.delete',
   'prospects.view_own', 'prospects.view_all', 'prospects.create', 'prospects.edit', 'prospects.convert',
-  'requests.view_own', 'requests.view_all', 'requests.create', 'requests.edit', 'requests.assign', 'requests.push',
+  'requests.view_own', 'requests.view_all', 'requests.create', 'requests.edit', 'requests.assign', 'requests.push', 'requests.delete',
   'visits.view_own', 'visits.view_all', 'visits.create', 'visits.edit',
+  'calendar.view_own', 'calendar.view_all', 'calendar.create', 'calendar.edit', 'calendar.delete',
   'services.view_all', 'services.create', 'services.edit', 'services.delete',
   'providers.view_all', 'providers.create', 'providers.edit', 'providers.delete',
   'users.view_all', 'users.manage',
@@ -38,7 +39,15 @@ async function main() {
   })
 
   const ownPermissions = permissionRecords.filter(
-    (p) => /view_own|create|edit$/.test(p.key) || /^(services|providers)\.view_all$/.test(p.key),
+    (p) =>
+      /view_own|create|edit$/.test(p.key) ||
+      /^(services|providers)\.view_all$/.test(p.key) ||
+      // Calendar activities are personal (tasks/reminders/etc a staff member
+      // creates for themselves), unlike dealers/services/providers which are
+      // shared business records — so unlike those, regular staff can delete
+      // their own. The service layer's ownership check still stops them
+      // deleting anyone else's.
+      p.key === 'calendar.delete',
   )
   await prisma.rolePermission.deleteMany({ where: { roleId: staffRole.id } })
   await prisma.rolePermission.createMany({
@@ -80,9 +89,9 @@ async function main() {
   // ── Master data ───────────────────────────────────────────────────────
   const tiers = await Promise.all(
     [
-      { name: 'Gold', multiplier: 0.8, color: '#f59e0b' },
-      { name: 'Silver', multiplier: 1.0, color: '#6b7280' },
-      { name: 'Bronze', multiplier: 1.2, color: '#92400e' },
+      { name: 'Gold', multiplier: 0.8, priorityBoost: 1, rank: 1, color: '#f59e0b' },
+      { name: 'Silver', multiplier: 1.0, priorityBoost: 0, rank: 2, color: '#6b7280' },
+      { name: 'Bronze', multiplier: 1.2, priorityBoost: 0, rank: 3, color: '#92400e' },
     ].map((t) => prisma.tier.upsert({ where: { id: tierIdByName(t.name) }, create: t, update: t })),
   )
 
@@ -101,6 +110,16 @@ async function main() {
   await Promise.all(
     ['Dealer Agreement', 'Insurance Certificate', 'Business License'].map((name, i) =>
       prisma.docType.upsert({ where: { id: i + 1 }, create: { name }, update: { name } }),
+    ),
+  )
+
+  await Promise.all(
+    ['Maintenance', 'Insurance', 'Financing', 'Charging Infrastructure', 'Warranty Support'].map((name) =>
+      prisma.serviceCategory.upsert({
+        where: { name },
+        create: { name, slug: name.toLowerCase().replace(/\s+/g, '-') },
+        update: {},
+      }),
     ),
   )
 
@@ -352,7 +371,11 @@ async function main() {
   })
 
   // ── Sequences ─────────────────────────────────────────────────────────
-  for (const name of ['request', 'visit', 'prospect']) {
+  // Must cover every prefix nextRefNo() is actually called with, not just
+  // the ref_no format seeded rows happen to use above — a mismatch here
+  // (e.g. 'dlr' missing while 4 dealers are seeded as DLR-001..004) causes
+  // the first real prospect conversion to collide on the unique dealer code.
+  for (const name of ['request', 'visit', 'prospect', 'dlr']) {
     await prisma.sequence.upsert({ where: { name }, create: { name, value: 10 }, update: {} })
   }
 

@@ -2,23 +2,45 @@ import jwt, { JwtPayload, SignOptions } from 'jsonwebtoken'
 import { randomBytes, createHash } from 'crypto'
 import { env } from '../../config/env'
 
-export interface AccessTokenPayload extends JwtPayload {
-  sub: string // staff or dealerUser id, stringified
+/**
+ * `type` is the field every auth middleware trusts to decide which pipeline
+ * a token belongs to — staff and dealer tokens are otherwise structurally
+ * unrelated (different subject id spaces, different claims). Never derive
+ * "is this a dealer" from anything else (e.g. the `role` string, which only
+ * exists for staff-side UI/permission display).
+ */
+export interface StaffAccessTokenPayload extends JwtPayload {
+  type: 'staff'
+  sub: string // Staff id, stringified
   permissions: string[]
-  role?: string
-  dealerId?: number
+  role: string
 }
 
-export function signAccessToken(
-  staffId: number,
-  permissions: string[],
-  extra?: { role?: string; dealerId?: number },
-): { token: string; expiresIn: number } {
+export interface DealerAccessTokenPayload extends JwtPayload {
+  type: 'dealer'
+  sub: string // DealerUser id, stringified
+}
+
+export type AccessTokenPayload = StaffAccessTokenPayload | DealerAccessTokenPayload
+
+function sign(sub: number, payload: Record<string, unknown>): { token: string; expiresIn: number } {
   const options: SignOptions = { expiresIn: env.JWT_ACCESS_EXPIRES_IN as SignOptions['expiresIn'] }
-  const token = jwt.sign({ sub: String(staffId), permissions, ...extra }, env.JWT_ACCESS_SECRET, options)
+  const token = jwt.sign({ sub: String(sub), ...payload }, env.JWT_ACCESS_SECRET, options)
   const decoded = jwt.decode(token) as JwtPayload
   const expiresIn = decoded.exp && decoded.iat ? decoded.exp - decoded.iat : 0
   return { token, expiresIn }
+}
+
+export function signStaffAccessToken(
+  staffId: number,
+  permissions: string[],
+  role: string,
+): { token: string; expiresIn: number } {
+  return sign(staffId, { type: 'staff', permissions, role })
+}
+
+export function signDealerAccessToken(dealerUserId: number): { token: string; expiresIn: number } {
+  return sign(dealerUserId, { type: 'dealer' })
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {

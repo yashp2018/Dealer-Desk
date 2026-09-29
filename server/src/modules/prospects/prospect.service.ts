@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '../../config/database'
 import { prospectRepository } from './prospect.repository'
 import { toProspectDto, toOnboardingItemDto } from './prospect.mapper'
@@ -24,8 +25,16 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 }
 
 export const prospectService = {
-  async list(params: { skip: number; take: number; q?: string; stage?: string; ownerStaffId?: number }) {
-    const { prospects, total } = await prospectRepository.findMany(params)
+  async list(
+    params: { skip: number; take: number; q?: string; stage?: string; ownerStaffId?: number },
+    actor: { id: number; permissions: string[] },
+  ) {
+    const canViewAll = actor.permissions.includes('*') || actor.permissions.includes('prospects.view_all')
+    // A view_own-only staff member can never widen their own results by
+    // passing a different owner_staff_id — their effective scope is always
+    // just themselves, regardless of what the query string asks for.
+    const scopedParams = canViewAll ? params : { ...params, ownerStaffId: actor.id }
+    const { prospects, total } = await prospectRepository.findMany(scopedParams)
     return { prospects: prospects.map(toProspectDto), total }
   },
 
@@ -35,7 +44,15 @@ export const prospectService = {
     return prospect
   },
 
-  async create(input: CreateProspectInput, actorStaffId: number) {
+  async create(input: CreateProspectInput, actor: { id: number; permissions: string[] }) {
+    const actorStaffId = actor.id
+    // Unlike Requests, every prospect must have an owner (owner_staff_id is
+    // required on the schema) — only requests.view_all-equivalent staff can
+    // hand a new prospect to someone else; anyone else always ends up
+    // owning what they create, regardless of what they submit.
+    const canAssignOthers = actor.permissions.includes('*') || actor.permissions.includes('prospects.view_all')
+    const ownerStaffId = canAssignOthers ? input.owner_staff_id : actorStaffId
+
     const created = await prisma.$transaction(async (tx) => {
       const refNo = await nextRefNo('PROS', tx)
       const prospect = await tx.prospect.create({
@@ -48,7 +65,7 @@ export const prospectService = {
           whatsapp: input.whatsapp ?? '',
           city: input.city ?? '',
           stateNormalized: input.state_normalized ?? '',
-          ownerStaffId: input.owner_staff_id,
+          ownerStaffId,
           source: input.source ?? '',
           stage: 'new',
         },
@@ -59,9 +76,25 @@ export const prospectService = {
     return toProspectDto(created)
   },
 
-  async update(id: number, patch: Record<string, unknown>, actorStaffId: number) {
+  async update(id: number, patch: Record<string, unknown>, actor: { id: number; permissions: string[] }) {
+    const actorStaffId = actor.id
     await this.getOrThrow(id)
-    const updated = await prospectRepository.update(id, patch as never)
+    const data: Prisma.ProspectUpdateInput = {}
+    if ('company_name' in patch) data.companyName = patch.company_name as string
+    if ('contact_name' in patch) data.contactName = patch.contact_name as string
+    if ('email' in patch) data.email = patch.email as string
+    if ('phone' in patch) data.phone = patch.phone as string
+    if ('whatsapp' in patch) data.whatsapp = patch.whatsapp as string
+    if ('city' in patch) data.city = patch.city as string
+    if ('state_normalized' in patch) data.stateNormalized = patch.state_normalized as string
+    if ('source' in patch) data.source = patch.source as string
+    if ('owner_staff_id' in patch) {
+      const canAssignOthers = actor.permissions.includes('*') || actor.permissions.includes('prospects.view_all')
+      const ownerStaffId = canAssignOthers ? (patch.owner_staff_id as number) : actorStaffId
+      data.owner = { connect: { id: ownerStaffId } }
+    }
+
+    const updated = await prospectRepository.update(id, data)
     await recordTimelineEvent({ entityType: 'prospect', entityId: id, eventType: 'updated', summary: 'Prospect details updated', actorStaffId })
     return toProspectDto(updated)
   },

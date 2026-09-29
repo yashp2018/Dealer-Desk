@@ -25,3 +25,14 @@ export const dateRangeQuery = z.object({
 export const isoDateTime = z.string().refine((val) => !Number.isNaN(Date.parse(val)), {
   message: 'Must be a valid date/time string',
 })
+
+// Loose, internationally-friendly phone check — digits/spaces/dashes/parens,
+// optional leading +, 7-20 characters. Not a strict E.164 validator (this app
+// stores numbers as freeform display strings, not for dialing), just enough
+// to reject obvious garbage before it lands in a VARCHAR(191) column.
+export const phoneString = z
+  .string()
+  .trim()
+  .regex(/^\+?[\d\s\-().]{7,20}$/, 'Must be a valid phone number')
+  .optional()
+  .or(z.literal(''))

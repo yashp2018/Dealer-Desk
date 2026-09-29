@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { phoneString } from '../../common/validators/common'
 
 export const PROSPECT_STAGES = [
   'new',
@@ -21,15 +22,15 @@ export const listProspectsQuery = z.object({
 })
 
 export const createProspectSchema = z.object({
-  company_name: z.string().min(1),
-  contact_name: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
-  phone: z.string().optional(),
-  whatsapp: z.string().optional(),
-  city: z.string().optional(),
-  state_normalized: z.string().optional(),
+  company_name: z.string().min(1).max(191),
+  contact_name: z.string().max(191).optional(),
+  email: z.string().email().max(191).optional().or(z.literal('')),
+  phone: phoneString,
+  whatsapp: phoneString,
+  city: z.string().max(191).optional(),
+  state_normalized: z.string().max(191).optional(),
   owner_staff_id: z.number().int().positive(),
-  source: z.string().optional(),
+  source: z.string().max(191).optional(),
 })
 
 export const updateProspectSchema = createProspectSchema.partial()

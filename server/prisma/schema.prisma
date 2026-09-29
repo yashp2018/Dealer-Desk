@@ -37,6 +37,12 @@ model Staff {
   auditLogs           AuditLog[]
   createdProviders    Provider[]
   createdServices     Service[]
+  escalationTargetFor EscalationRule[]
+  visitAttachments    VisitAttachment[]
+  ownedCalendarActivities   CalendarActivity[] @relation("CalendarActivityOwner")
+  createdCalendarActivities CalendarActivity[] @relation("CalendarActivityCreator")
+  updatedCalendarActivities CalendarActivity[] @relation("CalendarActivityUpdater")
+  importedDealerCandidates  DealerImportCandidate[]
 
   @@map("staff")
 }
@@ -112,10 +118,12 @@ model RefreshToken {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Tier {
-  id         Int     @id @default(autoincrement())
-  name       String
-  multiplier Float
-  color      String  @default("#6b7280") // used to render Dealer.tier_color; not part of the bootstrap Tier payload
+  id           Int     @id @default(autoincrement())
+  name         String
+  multiplier   Float // response time multiplier — lower means faster SLA
+  priorityBoost Int    @default(0) // levels to reduce effective priority by for dealers in this tier
+  rank         Int     @default(0) // display/precedence order in Setup — lower ranks first
+  color        String  @default("#6b7280") // used to render Dealer.tier_color; not part of the bootstrap Tier payload
 
   dealers Dealer[]
 
@@ -157,9 +165,11 @@ model RequestType {
   slaHours        Int      @map("sla_hours")
   pushTarget      String?  @map("push_target")
   allowsProspect  Boolean  @default(false) @map("allows_prospect")
+  goesThroughProduction Boolean @default(false) @map("goes_through_production")
 
-  fields   RequestTypeField[]
-  requests Request[]
+  fields          RequestTypeField[]
+  requests        Request[]
+  escalationRules EscalationRule[]
 
   @@map("request_types")
 }
@@ -249,16 +259,43 @@ model Dealer {
   territory Territory @relation(fields: [territoryId], references: [id])
   owner     Staff?    @relation("DealerOwner", fields: [ownerStaffId], references: [id])
 
-  contacts    DealerContact[]
-  requests    Request[]
-  visits      Visit[]
-  prospects   Prospect[]      @relation("ConvertedDealer")
-  dealerUsers DealerUser[]
+  contacts          DealerContact[]
+  requests          Request[]
+  visits            Visit[]
+  prospects         Prospect[]         @relation("ConvertedDealer")
+  dealerUsers       DealerUser[]
+  notifications     Notification[]
+  calendarActivities CalendarActivity[]
+  importCandidates  DealerImportCandidate[]
 
   @@index([territoryId])
   @@index([tierId])
   @@index([ownerStaffId])
   @@map("dealers")
+}
+
+/// A row parsed from an uploaded dealer list (CSV/Excel), staged here until
+/// someone picks it while creating a Dealer — at which point it's marked
+/// used and linked to the Dealer it became, so it drops out of future
+/// pick-lists without losing the audit trail of where that dealer came from.
+model DealerImportCandidate {
+  id              Int       @id @default(autoincrement())
+  name            String
+  city            String?
+  phonePrimary    String?   @map("phone_primary")
+  stateNormalized String?   @map("state_normalized")
+  sourceFileName  String?   @map("source_file_name")
+  status          String    @default("pending") @map("status") // pending|used
+  usedDealerId    Int?      @map("used_dealer_id")
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  usedAt          DateTime? @map("used_at")
+
+  usedDealer Dealer? @relation(fields: [usedDealerId], references: [id])
+  creator    Staff?  @relation(fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@map("dealer_import_candidates")
 }
 
 model DealerContact {
@@ -320,7 +357,10 @@ model OnboardingItem {
 
   prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
 
-  @@index([prospectId])
+  // Without this, seed.ts's `skipDuplicates: true` has no unique index to
+  // detect a duplicate against, so re-running the seed silently inserts a
+  // fresh duplicate batch every time instead of skipping.
+  @@unique([prospectId, docName])
   @@map("onboarding_items")
 }
 
@@ -358,8 +398,9 @@ model Request {
   prospect Prospect?   @relation(fields: [prospectId], references: [id])
   owner    Staff?      @relation("RequestOwner", fields: [ownerStaffId], references: [id])
 
-  fields RequestFieldValue[]
-  lines  RequestLine[]
+  fields          RequestFieldValue[]
+  lines           RequestLine[]
+  escalationLogs  EscalationLog[]
 
   @@index([dealerId])
   @@index([prospectId])
@@ -372,14 +413,15 @@ model Request {
 }
 
 model RequestFieldValue {
-  id        Int    @id @default(autoincrement())
-  requestId Int    @map("request_id")
-  key       String
-  value     String @db.Text
+  id         Int    @id @default(autoincrement())
+  requestId  Int    @map("request_id")
+  groupIndex Int    @default(0) @map("group_index") // lets one request carry multiple repeated field groups (e.g. several vehicles on one warranty claim)
+  key        String
+  value      String @db.Text
 
   request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  @@unique([requestId, key])
+  @@unique([requestId, key, groupIndex])
   @@map("request_field_values")
 }
 
@@ -422,10 +464,11 @@ model Visit {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  dealer    Dealer?   @relation(fields: [dealerId], references: [id])
-  prospect  Prospect? @relation(fields: [prospectId], references: [id])
-  visitType VisitType @relation(fields: [visitTypeId], references: [id])
-  owner     Staff     @relation("VisitOwner", fields: [ownerStaffId], references: [id])
+  dealer      Dealer?           @relation(fields: [dealerId], references: [id])
+  prospect    Prospect?         @relation(fields: [prospectId], references: [id])
+  visitType   VisitType         @relation(fields: [visitTypeId], references: [id])
+  owner       Staff             @relation("VisitOwner", fields: [ownerStaffId], references: [id])
+  attachments VisitAttachment[]
 
   @@index([dealerId])
   @@index([prospectId])
@@ -433,6 +476,109 @@ model Visit {
   @@index([scheduledAt])
   @@index([status])
   @@map("visits")
+}
+
+model VisitAttachment {
+  id                Int      @id @default(autoincrement())
+  visitId           Int      @map("visit_id")
+  fileName          String   @map("file_name")
+  storedName        String   @map("stored_name")
+  mimeType          String   @map("mime_type")
+  sizeBytes         Int      @map("size_bytes")
+  uploadedByStaffId Int      @map("uploaded_by_staff_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  visit      Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  uploadedBy Staff @relation(fields: [uploadedByStaffId], references: [id])
+
+  @@index([visitId])
+  @@map("visit_attachments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Calendar activities — user-created tasks/reminders/meetings/follow-ups/
+// callbacks. Requests and Visits already carry their own scheduled_at/due_at
+// and appear on the calendar directly from their own tables (see
+// server/src/modules/calendar) — this model is only for activities that
+// don't already exist as some other domain object.
+// ─────────────────────────────────────────────────────────────────────────
+
+model CalendarActivity {
+  id              Int       @id @default(autoincrement())
+  title           String
+  description     String?   @db.Text
+  type            String    // task|reminder|meeting|followup|callback|sales_activity|payment_followup|delivery|service_followup
+  startAt         DateTime  @map("start_at")
+  endAt           DateTime  @map("end_at")
+  timezone        String    @default("Asia/Kolkata")
+  reminderMinutes Int?      @map("reminder_minutes")
+  dealerId        Int?      @map("dealer_id")
+  ownerStaffId    Int       @map("owner_staff_id")
+  priority        Int       @default(3)
+  status          String    @default("scheduled") // scheduled|completed|cancelled
+  completedAt     DateTime? @map("completed_at")
+  createdBy       Int       @map("created_by")
+  updatedBy       Int?      @map("updated_by")
+  clientUuid      String?   @unique @map("client_uuid")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  dealer  Dealer? @relation(fields: [dealerId], references: [id])
+  owner   Staff   @relation("CalendarActivityOwner", fields: [ownerStaffId], references: [id])
+  creator Staff   @relation("CalendarActivityCreator", fields: [createdBy], references: [id])
+  updater Staff?  @relation("CalendarActivityUpdater", fields: [updatedBy], references: [id])
+
+  @@index([ownerStaffId])
+  @@index([dealerId])
+  @@index([startAt])
+  @@index([status])
+  @@map("calendar_activities")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Escalation rules
+// ─────────────────────────────────────────────────────────────────────────
+
+model EscalationRule {
+  id       Int     @id @default(autoincrement())
+  name     String
+  isActive Boolean @default(true) @map("is_active")
+
+  triggerPriority      Int? @map("trigger_priority") // null = any priority
+  triggerRequestTypeId Int? @map("trigger_request_type_id") // null = any type
+  triggerHoursOverdue  Int  @map("trigger_hours_overdue") // 0 = the moment it breaches SLA
+
+  actionType          String  @map("action_type") // notify_owner | notify_role | reassign
+  actionTargetStaffId Int?    @map("action_target_staff_id") // used by reassign
+  actionTargetRole    String? @map("action_target_role") // used by notify_role (Role.key)
+
+  /// Template placeholders: {ref_no} {dealer_name} {hours_overdue} {title}
+  escalationMessage String @db.Text @map("escalation_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  requestType RequestType? @relation(fields: [triggerRequestTypeId], references: [id])
+  targetStaff Staff?       @relation(fields: [actionTargetStaffId], references: [id])
+  logs        EscalationLog[]
+
+  @@index([isActive])
+  @@map("escalation_rules")
+}
+
+model EscalationLog {
+  id          Int      @id @default(autoincrement())
+  ruleId      Int      @map("rule_id")
+  requestId   Int      @map("request_id")
+  actionTaken String   @db.Text @map("action_taken")
+  firedAt     DateTime @default(now()) @map("fired_at")
+
+  rule    EscalationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  request Request        @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, requestId])
+  @@index([requestId])
+  @@map("escalation_logs")
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -456,7 +602,10 @@ model TimelineEntry {
 
 model Notification {
   id        Int      @id @default(autoincrement())
-  staffId   Int      @map("staff_id")
+  // Exactly one of staffId / dealerId is set, enforced in application code —
+  // staff and dealer-portal notifications are otherwise unrelated audiences.
+  staffId   Int?     @map("staff_id")
+  dealerId  Int?     @map("dealer_id")
   title     String
   body      String   @db.Text
   message   String   @db.Text
@@ -464,9 +613,11 @@ model Notification {
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 
-  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staff  Staff?  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  dealer Dealer? @relation(fields: [dealerId], references: [id], onDelete: Cascade)
 
   @@index([staffId, isRead])
+  @@index([dealerId, isRead])
   @@map("notifications")
 }
 
@@ -488,6 +639,23 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorStaffId])
   @@map("audit_logs")
+}
+
+/// One-time password for the forgot-password flow. Keyed by email rather
+/// than a FK to Staff/DealerUser because we don't know which table the
+/// account lives in until reset time (same "try dealer, then staff" lookup
+/// order as login) — see authService.requestPasswordReset/resetPassword.
+model PasswordResetOtp {
+  id         Int       @id @default(autoincrement())
+  email      String
+  otpHash    String    @map("otp_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("password_reset_otps")
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -552,13 +720,25 @@ model Provider {
   @@map("providers")
 }
 
+model ServiceCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  services Service[]
+
+  @@map("service_categories")
+}
+
 model Service {
   id                  Int      @id @default(autoincrement())
   serviceCode         String   @unique @map("service_code")
   name                String
   slug                String   @unique
-  categoryId          String?  @map("category_id")
-  categoryName        String?  @map("category_name")
+  categoryId          Int?     @map("category_id")
   shortDescription    String?  @map("short_description")
   description         String?  @db.Text
   images              Json     @default("[]")
@@ -589,8 +769,9 @@ model Service {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
-  provider Provider? @relation(fields: [providerId], references: [id])
-  creator  Staff?    @relation(fields: [createdBy], references: [id])
+  provider Provider?        @relation(fields: [providerId], references: [id])
+  creator  Staff?           @relation(fields: [createdBy], references: [id])
+  category ServiceCategory? @relation(fields: [categoryId], references: [id])
 
   @@index([status])
   @@index([providerId])

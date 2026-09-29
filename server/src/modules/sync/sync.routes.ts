@@ -8,22 +8,25 @@ import { ok } from '../../common/utils/response'
 import { env } from '../../config/env'
 import { requestService } from '../requests/request.service'
 import { visitService } from '../visits/visit.service'
-import { createRequestSchema } from '../requests/request.validation'
-import { createVisitSchema } from '../visits/visit.validation'
+import { createRequestSchema, noteSchema } from '../requests/request.validation'
+import { createVisitSchema, visitOutcomeSchema } from '../visits/visit.validation'
+
+const visitOutcomeMutationSchema = visitOutcomeSchema.extend({ visit_id: z.number().int().positive() })
+const requestNoteMutationSchema = noteSchema.extend({ request_id: z.number().int().positive() })
 
 const mutationSchema = z.object({
   client_uuid: z.string().uuid(),
   op_type: z.enum(['request.create', 'visit.create', 'visit.outcome', 'request.note']),
   payload: z.record(z.unknown()),
 })
-
+ 
 const batchSchema = z.object({
   mutations: z.array(mutationSchema).max(env.SYNC_BATCH_MAX),
 })
 
 export const syncRouter = Router()
 syncRouter.use(authenticate)
-
+ 
 syncRouter.post(
   '/batch',
   validate({ body: batchSchema }),
@@ -42,18 +45,18 @@ syncRouter.post(
         let entityId: number | undefined
         if (mutation.op_type === 'request.create') {
           const parsed = createRequestSchema.parse({ ...mutation.payload, client_uuid: mutation.client_uuid })
-          const created = await requestService.create(parsed, staffId)
+          const created = await requestService.create(parsed, req.staff!)
           entityId = created.id
         } else if (mutation.op_type === 'visit.create') {
           const parsed = createVisitSchema.parse({ ...mutation.payload, client_uuid: mutation.client_uuid })
-          const createdVisit = await visitService.create(parsed, staffId)
+          const createdVisit = await visitService.create(parsed, req.staff!)
           entityId = createdVisit.id
         } else if (mutation.op_type === 'visit.outcome') {
-          const payload = mutation.payload as { visit_id: number; outcome: string; outcome_note?: string; next_step?: string; next_at?: string }
+          const payload = visitOutcomeMutationSchema.parse(mutation.payload)
           const updated = await visitService.submitOutcome(payload.visit_id, payload, staffId)
           entityId = updated.id
         } else if (mutation.op_type === 'request.note') {
-          const payload = mutation.payload as { request_id: number; body: string }
+          const payload = requestNoteMutationSchema.parse(mutation.payload)
           await requestService.addNote(payload.request_id, payload.body, staffId)
           entityId = payload.request_id
         }
@@ -79,9 +82,18 @@ syncRouter.get(
   '/changes',
   asyncHandler(async (req: Request, res: Response) => {
     const since = req.query.since ? new Date(String(req.query.since)) : new Date(0)
+    const perms = req.staff!.permissions
+    const canViewAllRequests = perms.includes('*') || perms.includes('requests.view_all')
+    const canViewAllVisits = perms.includes('*') || perms.includes('visits.view_all')
     const [requests, visits] = await Promise.all([
-      prisma.request.findMany({ where: { updatedAt: { gt: since } }, select: { id: true, updatedAt: true, status: true } }),
-      prisma.visit.findMany({ where: { updatedAt: { gt: since } }, select: { id: true, updatedAt: true, status: true } }),
+      prisma.request.findMany({
+        where: { updatedAt: { gt: since }, ...(canViewAllRequests ? {} : { ownerStaffId: req.staff!.id }) },
+        select: { id: true, updatedAt: true, status: true },
+      }),
+      prisma.visit.findMany({
+        where: { updatedAt: { gt: since }, ...(canViewAllVisits ? {} : { ownerStaffId: req.staff!.id }) },
+        select: { id: true, updatedAt: true, status: true },
+      }),
     ])
     ok(res, {
       changes: [

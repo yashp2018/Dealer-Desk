@@ -1,7 +1,8 @@
-import { Service, Provider, Prisma } from '@prisma/client'
+import { Service, Provider, ServiceCategory, Prisma } from '@prisma/client'
 
 type ServiceWithProvider = Service & {
   provider?: Pick<Provider, 'id' | 'name' | 'logo' | 'verificationStatus' | 'status'> | null
+  category?: Pick<ServiceCategory, 'id' | 'name' | 'slug'> | null
 }
 
 function asStringArray(json: Prisma.JsonValue): string[] {
@@ -15,7 +16,7 @@ export function toServiceDto(s: ServiceWithProvider) {
     name: s.name,
     slug: s.slug,
     categoryId: s.categoryId ?? undefined,
-    categoryName: s.categoryName ?? undefined,
+    category: s.category ? { id: s.category.id, name: s.category.name, slug: s.category.slug } : undefined,
     shortDescription: s.shortDescription ?? undefined,
     description: s.description ?? undefined,
     images: asStringArray(s.images),

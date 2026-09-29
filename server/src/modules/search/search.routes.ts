@@ -14,11 +14,15 @@ searchRouter.get(
     const q = String(req.query.q ?? '').trim()
     if (q.length < 2) throw new BadRequestError('Query must be at least 2 characters')
 
+    const perms = req.staff!.permissions
+    const canViewAll = (resource: string) => perms.includes('*') || perms.includes(`${resource}.view_all`)
+    const ownerScope = (resource: string) => (canViewAll(resource) ? {} : { ownerStaffId: req.staff!.id })
+
     const [dealers, prospects, requests, visits] = await Promise.all([
-      prisma.dealer.findMany({ where: { OR: [{ name: { contains: q } }, { code: { contains: q } }] }, take: 8 }),
-      prisma.prospect.findMany({ where: { OR: [{ companyName: { contains: q } }, { refNo: { contains: q } }] }, take: 8 }),
-      prisma.request.findMany({ where: { OR: [{ title: { contains: q } }, { refNo: { contains: q } }] }, take: 8 }),
-      prisma.visit.findMany({ where: { OR: [{ title: { contains: q } }, { refNo: { contains: q } }] }, take: 8 }),
+      prisma.dealer.findMany({ where: { OR: [{ name: { contains: q } }, { code: { contains: q } }], ...ownerScope('dealers') }, take: 8 }),
+      prisma.prospect.findMany({ where: { OR: [{ companyName: { contains: q } }, { refNo: { contains: q } }], ...ownerScope('prospects') }, take: 8 }),
+      prisma.request.findMany({ where: { OR: [{ title: { contains: q } }, { refNo: { contains: q } }], ...ownerScope('requests') }, take: 8 }),
+      prisma.visit.findMany({ where: { OR: [{ title: { contains: q } }, { refNo: { contains: q } }], ...ownerScope('visits') }, take: 8 }),
     ])
 
     ok(res, {

@@ -3,7 +3,7 @@ import { env } from '../../config/env'
 
 export const bootstrapService = {
   async build() {
-    const [statuses, transitions, tiers, territories, types, visitTypes, docTypes, dealers, staff] =
+    const [statuses, transitions, tiers, territories, types, visitTypes, docTypes, serviceCategories, dealers, staff] =
       await Promise.all([
         prisma.statusConfig.findMany({ where: { entityType: 'request' }, orderBy: { sortOrder: 'asc' } }),
         prisma.statusTransition.findMany({ where: { entityType: 'request' } }),
@@ -12,6 +12,7 @@ export const bootstrapService = {
         prisma.requestType.findMany({ include: { fields: { orderBy: { sortOrder: 'asc' } } }, orderBy: { id: 'asc' } }),
         prisma.visitType.findMany({ orderBy: { id: 'asc' } }),
         prisma.docType.findMany({ orderBy: { id: 'asc' } }),
+        prisma.serviceCategory.findMany({ orderBy: { name: 'asc' } }),
         prisma.dealer.findMany({
           select: { id: true, code: true, name: true, tierId: true, territoryId: true },
           orderBy: { id: 'asc' },
@@ -51,6 +52,7 @@ export const bootstrapService = {
         sla_hours: t.slaHours,
         push_target: t.pushTarget,
         allows_prospect: t.allowsProspect,
+        goes_through_production: t.goesThroughProduction,
         fields: t.fields.map((f) => ({
           key: f.key,
           label: f.label,
@@ -65,6 +67,7 @@ export const bootstrapService = {
       })),
       visit_types: visitTypes.map((v) => ({ id: v.id, name: v.name })),
       doc_types: docTypes.map((d) => ({ id: d.id, name: d.name })),
+      service_categories: serviceCategories.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
       dealers: dealers.map((d) => ({ id: d.id, code: d.code, name: d.name, tier_id: d.tierId, territory_id: d.territoryId })),
       staff,
     }

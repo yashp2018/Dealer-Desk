@@ -9,15 +9,6 @@ export interface AuthenticatedStaff {
   email: string
   role: string
   permissions: string[]
-  dealerId?: number
-}
-
-/** Shape embedded in the JWT payload. */
-export interface StaffPayload {
-  id: number
-  email: string
-  name: string
-  role: string
 }
 
 declare global {
@@ -29,6 +20,15 @@ declare global {
   }
 }
 
+/**
+ * Staff-only authentication. Structurally rejects any dealer-portal token —
+ * a dealer token's `type` claim can never be 'staff', so it fails here
+ * before any route handler or permission check ever runs. This is the
+ * single choke point that keeps every internal route (bootstrap, dashboard,
+ * search, setup, sync, dealers/prospects/requests/visits lists, etc.)
+ * unreachable to a dealer login, without each route having to remember to
+ * check the caller's type itself.
+ */
 export async function authenticate(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
     const header = req.headers.authorization
@@ -37,40 +37,26 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     }
     const token = header.slice('Bearer '.length).trim()
     const payload = verifyAccessToken(token)
-    const userId = Number(payload.sub)
-    const role = payload.role ?? 'staff'
 
-    if (role === 'dealer') {
-      const dealerUser = await prisma.dealerUser.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, email: true, isActive: true, dealerId: true },
-      })
-      if (!dealerUser || !dealerUser.isActive) {
-        throw new UnauthorizedError('Account is inactive or no longer exists')
-      }
-      req.staff = {
-        id: dealerUser.id,
-        name: dealerUser.name,
-        email: dealerUser.email,
-        role: 'dealer',
-        permissions: [],
-        dealerId: dealerUser.dealerId,
-      }
-    } else {
-      const staff = await prisma.staff.findUnique({
-        where: { id: userId },
-        select: { id: true, name: true, email: true, isActive: true },
-      })
-      if (!staff || !staff.isActive) {
-        throw new UnauthorizedError('Account is inactive or no longer exists')
-      }
-      req.staff = {
-        id: staff.id,
-        name: staff.name,
-        email: staff.email,
-        role,
-        permissions: payload.permissions ?? [],
-      }
+    if (payload.type !== 'staff') {
+      throw new UnauthorizedError('Staff access only')
+    }
+
+    const staffId = Number(payload.sub)
+    const staff = await prisma.staff.findUnique({
+      where: { id: staffId },
+      select: { id: true, name: true, email: true, isActive: true },
+    })
+    if (!staff || !staff.isActive) {
+      throw new UnauthorizedError('Account is inactive or no longer exists')
+    }
+
+    req.staff = {
+      id: staff.id,
+      name: staff.name,
+      email: staff.email,
+      role: payload.role,
+      permissions: payload.permissions ?? [],
     }
 
     next()

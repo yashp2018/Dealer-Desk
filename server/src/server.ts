@@ -1,11 +1,14 @@
 import { createApp } from './app'
-import { env } from './config/env'
+import { env, isTest } from './config/env'
 import { logger } from './config/logger'
 import { connectDatabase, disconnectDatabase } from './config/database'
+import { startEscalationJob, stopEscalationJob } from './jobs/escalationJob'
 
 async function main(): Promise<void> {
   await connectDatabase()
   logger.info('Database connection established')
+
+  if (!isTest) startEscalationJob()
 
   const app = createApp()
   const server = app.listen(env.PORT, () => {
@@ -14,6 +17,7 @@ async function main(): Promise<void> {
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`Received ${signal}, shutting down gracefully...`)
+    stopEscalationJob()
     server.close(async () => {
       await disconnectDatabase()
       logger.info('Shutdown complete')

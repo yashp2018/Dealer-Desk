@@ -1,4 +1,4 @@
-import { Visit, VisitType, Staff, Dealer, Prospect } from '@prisma/client'
+import { Visit, VisitType, Staff, Dealer, Prospect, VisitAttachment } from '@prisma/client'
 
 type VisitWithRelations = Visit & {
   visitType: VisitType
@@ -25,5 +25,21 @@ export function toVisitDto(v: VisitWithRelations) {
     owner_name: v.owner?.name ?? '',
     owner_staff_id: v.ownerStaffId,
     agenda_json: v.agendaJson ? JSON.stringify(v.agendaJson) : null,
+  }
+}
+
+export function toVisitAttachmentDto(a: VisitAttachment & { uploadedBy: Staff }) {
+  return {
+    id: a.id,
+    visit_id: a.visitId,
+    file_name: a.fileName,
+    mime_type: a.mimeType,
+    size_bytes: a.sizeBytes,
+    uploaded_by_name: a.uploadedBy?.name ?? '',
+    created_at: a.createdAt.toISOString(),
+    // Relative to the API base — requires the same Authorization header as
+    // any other API call, so callers must fetch it (not use it as a bare
+    // <img src>) and render the resulting blob.
+    url: `/visits/${a.visitId}/attachments/${a.id}/file`,
   }
 }
