@@ -1,17 +1,24 @@
 import {
   Bell,
+  CalendarClock,
   CalendarDays,
   ClipboardList,
+  LogOut,
   MapPin,
   Plus,
   Search,
   Store,
   UserRound,
   Users,
+  WifiOff,
   X,
 } from 'lucide-react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
+import { useNotifications } from '../../hooks/useNotifications'
+import { useAuth } from '../../hooks/useAuth'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { logout as logoutRequest } from '../../api/auth'
 
 type Tab = {
   to: string
@@ -47,17 +54,33 @@ const tabs: Tab[] = [
 export default function MobileLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { data: notifications = [] } = useNotifications()
+  const hasUnread = notifications.some((n) => !n.is_read)
+  const { staff, logout } = useAuth()
+  const isOnline = useOnlineStatus()
 
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
 
+  const handleLogout = async () => {
+    try { await logoutRequest() } finally { logout() }
+  }
+
+  const initials = staff?.name?.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() ?? 'U'
+
+  // Full-screen single-purpose flows: each owns its own sticky action footer,
+  // so the persistent tab bar + FAB (which also sit fixed at the bottom of
+  // the screen) must get out of the way instead of silently painting over
+  // that page's Save/Submit button.
   const isQuickActionRoute =
     location.pathname === '/mobile/capture' ||
-    location.pathname === '/mobile/visit/new' ||
-    location.pathname === '/mobile/prospect/new'
+    location.pathname === '/mobile/prospect/new' ||
+    location.pathname === '/mobile/dealers/new' ||
+    location.pathname.startsWith('/mobile/visit/')
 
-  const handleNavigation = (path: string) => {
+  const handleNavigation = (path: string, state?: Record<string, unknown>) => {
     setQuickActionsOpen(false)
-    navigate(path)
+    navigate(path, state ? { state } : undefined)
   }
 
   return (
@@ -89,152 +112,211 @@ export default function MobileLayout() {
               >
                 <Bell className="h-5 w-5" />
 
-                {/* Replace with real unread count */}
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                {hasUnread && (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+                )}
               </button>
 
               {/* Profile */}
               <button
                 type="button"
-                aria-label="Profile"
-                onClick={() => navigate('/mobile/profile')}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-white transition hover:bg-slate-800 active:scale-95"
+                aria-label="Account"
+                onClick={() => setAccountOpen(true)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white transition hover:bg-slate-800 active:scale-95"
               >
-                <UserRound className="h-5 w-5" />
+                {initials !== 'U' ? initials : <UserRound className="h-5 w-5" />}
               </button>
             </div>
           </div>
+
+          {!isOnline && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <WifiOff className="h-3.5 w-3.5 shrink-0" />
+              You're offline — actions won't save until you're back online.
+            </div>
+          )}
         </header>
 
         {/* =========================================================
             PAGE CONTENT
         ========================================================= */}
-        <main className="min-h-0 flex-1 pb-[calc(92px+env(safe-area-inset-bottom))]">
+        <main className={`min-h-0 flex-1 ${isQuickActionRoute ? '' : 'pb-[calc(92px+env(safe-area-inset-bottom))]'}`}>
           <Outlet />
         </main>
 
         {/* =========================================================
-            QUICK ACTION BACKDROP
+            ACCOUNT SHEET
         ========================================================= */}
-        {quickActionsOpen && (
-          <button
-            type="button"
-            aria-label="Close quick actions"
-            onClick={() => setQuickActionsOpen(false)}
-            className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px]"
-          />
+        {accountOpen && (
+          <>
+            <button
+              type="button"
+              aria-label="Close account menu"
+              onClick={() => setAccountOpen(false)}
+              className="fixed inset-0 z-[65] bg-slate-950/45 backdrop-blur-[2px]"
+            />
+            <div className="fixed bottom-0 left-1/2 z-[70] w-full max-w-md -translate-x-1/2 pb-[env(safe-area-inset-bottom)]">
+              <div className="rounded-t-3xl border border-b-0 border-slate-200 bg-white p-4 shadow-2xl">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-900">{staff?.name ?? 'Account'}</p>
+                    <p className="truncate text-xs text-slate-500">{staff?.email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    onClick={() => setAccountOpen(false)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  className="flex w-full items-center gap-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3.5 text-sm font-semibold text-red-600 active:bg-red-100"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
-        {/* =========================================================
-            QUICK ACTIONS
-        ========================================================= */}
-        <div
-          className={`fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 transition-all duration-200 ${
-            quickActionsOpen
-              ? 'pointer-events-auto translate-y-0 opacity-100'
-              : 'pointer-events-none translate-y-4 opacity-0'
-          }`}
-        >
-          <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl">
-            <div className="mb-2 flex items-center justify-between px-2">
-              <div>
-                <p className="text-sm font-bold text-slate-900">
-                  Quick actions
-                </p>
-                <p className="text-xs text-slate-500">
-                  Create or update field activity
-                </p>
-              </div>
-
+        {!isQuickActionRoute && (
+          <>
+            {/* =========================================================
+                QUICK ACTION BACKDROP
+            ========================================================= */}
+            {quickActionsOpen && (
               <button
                 type="button"
                 aria-label="Close quick actions"
                 onClick={() => setQuickActionsOpen(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500"
-              >
-                <X className="h-4 w-4" />
-              </button>
+                className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px]"
+              />
+            )}
+
+            {/* =========================================================
+                QUICK ACTIONS
+            ========================================================= */}
+            <div
+              className={`fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 w-[calc(100%-32px)] max-w-md -translate-x-1/2 transition-all duration-200 ${
+                quickActionsOpen
+                  ? 'pointer-events-auto translate-y-0 opacity-100'
+                  : 'pointer-events-none translate-y-4 opacity-0'
+              }`}
+            >
+              <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-2xl">
+                <div className="mb-2 flex items-center justify-between px-2">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">
+                      Quick actions
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Create or update field activity
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-label="Close quick actions"
+                    onClick={() => setQuickActionsOpen(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <QuickAction
+                    icon={ClipboardList}
+                    label="Request"
+                    description="New request"
+                    onClick={() => handleNavigation('/mobile/capture')}
+                  />
+
+                  <QuickAction
+                    icon={MapPin}
+                    label="Visit"
+                    description="Plan visit"
+                    onClick={() => handleNavigation('/mobile/visit/new')}
+                  />
+
+                  <QuickAction
+                    icon={Users}
+                    label="Prospect"
+                    description="New prospect"
+                    onClick={() => handleNavigation('/mobile/prospect/new')}
+                  />
+
+                  <QuickAction
+                    icon={CalendarClock}
+                    label="Calendar Task"
+                    description="Task, reminder, meeting…"
+                    onClick={() => handleNavigation('/mobile/week', { openCreate: true })}
+                  />
+
+                  <QuickAction
+                    icon={Store}
+                    label="Dealer"
+                    description="New dealer"
+                    onClick={() => handleNavigation('/mobile/dealers/new')}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <QuickAction
-                icon={ClipboardList}
-                label="Request"
-                description="New request"
-                onClick={() => handleNavigation('/mobile/capture')}
-              />
+            {/* =========================================================
+                MAIN FAB
+            ========================================================= */}
+            <button
+              type="button"
+              aria-label={quickActionsOpen ? 'Close actions' : 'New activity'}
+              aria-expanded={quickActionsOpen}
+              onClick={() => setQuickActionsOpen((open) => !open)}
+              className={`fixed bottom-[calc(82px+env(safe-area-inset-bottom))] left-1/2 z-[60] flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-cyan-700 text-white shadow-xl shadow-cyan-900/30 transition-all duration-200 hover:bg-cyan-800 active:scale-95 ${
+                quickActionsOpen ? 'rotate-45' : ''
+              }`}
+            >
+              <Plus className="h-6 w-6" />
+            </button>
 
-              <QuickAction
-                icon={MapPin}
-                label="Visit"
-                description="Plan visit"
-                onClick={() => handleNavigation('/mobile/visit/new')}
-              />
+            {/* =========================================================
+                BOTTOM NAVIGATION
+            ========================================================= */}
+            <nav
+              aria-label="Mobile navigation"
+              className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 border-t border-slate-200 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] backdrop-blur"
+            >
+              {tabs.map(({ to, label, icon: Icon, end }) => {
+                const active = end
+                  ? location.pathname === to
+                  : location.pathname.startsWith(to)
 
-              <QuickAction
-                icon={Users}
-                label="Prospect"
-                description="New prospect"
-                onClick={() => handleNavigation('/mobile/prospect/new')}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* =========================================================
-            MAIN FAB
-        ========================================================= */}
-        <button
-          type="button"
-          aria-label={quickActionsOpen ? 'Close actions' : 'New activity'}
-          aria-expanded={quickActionsOpen}
-          onClick={() => setQuickActionsOpen((open) => !open)}
-          className={`fixed bottom-[calc(82px+env(safe-area-inset-bottom))] left-1/2 z-[60] flex h-14 w-14 -translate-x-1/2 items-center justify-center rounded-full bg-cyan-700 text-white shadow-xl shadow-cyan-900/30 transition-all duration-200 hover:bg-cyan-800 active:scale-95 ${
-            quickActionsOpen ? 'rotate-45' : ''
-          }`}
-        >
-          <Plus className="h-6 w-6" />
-        </button>
-
-        {/* =========================================================
-            BOTTOM NAVIGATION
-        ========================================================= */}
-        <nav
-          aria-label="Mobile navigation"
-          className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-md -translate-x-1/2 border-t border-slate-200 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] pt-1.5 shadow-[0_-8px_30px_rgba(15,23,42,0.06)] backdrop-blur"
-        >
-          {tabs.map(({ to, label, icon: Icon, end }) => {
-            const active = end
-              ? location.pathname === to
-              : location.pathname.startsWith(to)
-
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className="flex min-h-16 flex-1 items-center justify-center"
-              >
-                <span
-                  className={`flex min-w-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-3 py-1.5 text-[11px] font-semibold transition ${
-                    active
-                      ? 'bg-cyan-50 text-cyan-700'
-                      : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
-                  }`}
-                >
-                  <Icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} />
-                  <span>{label}</span>
-                </span>
-              </NavLink>
-            )
-          })}
-        </nav>
-
-        {/* =========================================================
-            ROUTE OVERLAY STATE
-        ========================================================= */}
-        {isQuickActionRoute && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 mx-auto h-24 max-w-md bg-gradient-to-t from-white to-transparent" />
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className="flex min-h-16 flex-1 items-center justify-center"
+                  >
+                    <span
+                      className={`flex min-w-[64px] flex-col items-center justify-center gap-1 rounded-2xl px-3 py-1.5 text-[11px] font-semibold transition ${
+                        active
+                          ? 'bg-cyan-50 text-cyan-700'
+                          : 'text-slate-400 hover:bg-slate-50 hover:text-slate-600'
+                      }`}
+                    >
+                      <Icon className="h-5 w-5" strokeWidth={active ? 2.5 : 2} />
+                      <span>{label}</span>
+                    </span>
+                  </NavLink>
+                )
+              })}
+            </nav>
+          </>
         )}
       </div>
     </div>

@@ -23,17 +23,17 @@ export interface ServiceAvailability {
 }
 
 export interface ServiceItem {
-  _id: string
+  id: number
   serviceCode: string
   name: string
   slug: string
-  categoryId?: string
-  categoryName?: string
+  categoryId?: number
+  category?: { id: number; name: string; slug: string }
   shortDescription?: string
   description?: string
   images?: string[]
-  providerId?: string
-  provider?: { _id: string; name: string; logo?: string; verificationStatus?: string }
+  providerId?: number
+  provider?: { id: number; name: string; logo?: string; verificationStatus?: string }
   serviceType?: string
   pricing?: ServicePricing
   duration?: { value: number; unit: string }
@@ -53,7 +53,7 @@ export interface ServiceListParams {
   page?: number
   limit?: number
   search?: string
-  category?: string
+  category?: number
   provider?: string
   location?: string
   status?: string
@@ -66,15 +66,13 @@ export interface ServiceListMeta {
   totalPages: number
 }
 
-export type CreateServicePayload = Omit<ServiceItem, '_id' | 'createdAt' | 'updatedAt' | 'provider'>
+export type CreateServicePayload = Omit<ServiceItem, 'id' | 'createdAt' | 'updatedAt' | 'provider' | 'category'>
 
-export async function getServices(params?: ServiceListParams): Promise<{ items: ServiceItem[]; meta?: ServiceListMeta }> {
-  const response = await apiClient.get('/services', { params }) as ServiceItem[] | { items: ServiceItem[]; meta?: ServiceListMeta }
-  if (Array.isArray(response)) return { items: response }
-  return response
+export async function getServices(params?: ServiceListParams): Promise<ServiceItem[]> {
+  return apiClient.get('/services', { params })
 }
 
-export async function getService(id: string): Promise<ServiceItem> {
+export async function getService(id: number): Promise<ServiceItem> {
   return apiClient.get(`/services/${id}`)
 }
 
@@ -82,10 +80,10 @@ export async function createService(payload: CreateServicePayload): Promise<Serv
   return apiClient.post('/services', payload)
 }
 
-export async function updateService(id: string, payload: Partial<CreateServicePayload>): Promise<ServiceItem> {
+export async function updateService(id: number, payload: Partial<CreateServicePayload>): Promise<ServiceItem> {
   return apiClient.patch(`/services/${id}`, payload)
 }
 
-export async function deleteService(id: string): Promise<void> {
+export async function deleteService(id: number): Promise<void> {
   await apiClient.delete(`/services/${id}`)
 }

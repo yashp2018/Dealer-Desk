@@ -12,7 +12,7 @@ export function useServices(params?: api.ServiceListParams) {
   })
 }
 
-export function useService(id?: string) {
+export function useService(id?: number) {
   return useQuery({
     queryKey: ['services', id],
     queryFn: () => api.getService(id!),
@@ -28,7 +28,7 @@ export function useCreateService() {
   })
 }
 
-export function useUpdateService(id: string) {
+export function useUpdateService(id: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (payload: Partial<api.CreateServicePayload>) => api.updateService(id, payload),

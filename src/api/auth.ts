@@ -1,26 +1,30 @@
 import apiClient from './client'
 import type { AxiosRequestConfig } from 'axios'
 import type { AuthData, LoginPayload } from './types'
-import { mockAuth, MOCK_CREDENTIALS } from './mockData'
 
-const MOCK = import.meta.env.VITE_USE_MOCK === 'true'
+export const login = (payload: LoginPayload): Promise<AuthData> =>
+  apiClient.post('/auth/login', payload)
 
-export const login = (payload: LoginPayload): Promise<AuthData> => {
-  if (MOCK) {
-    if (payload.email === MOCK_CREDENTIALS.email && payload.password === MOCK_CREDENTIALS.password) {
-      return Promise.resolve(mockAuth)
-    }
-    return Promise.reject(new Error('Invalid email or password'))
-  }
-  return apiClient.post('/auth/login', payload)
+export interface GoogleLoginPayload {
+  credential: string
+  device_id: string
+  platform: string
+  app_version: string
+  os_version: string
 }
 
-export const refreshToken = (): Promise<{ token: string; expires_in: number }> => {
-  if (MOCK) return Promise.resolve({ token: mockAuth.token, expires_in: mockAuth.expires_in })
-  return apiClient.post('/auth/refresh', undefined, { _skipAuthRefresh: true } as AxiosRequestConfig)
-}
+export const googleLogin = (payload: GoogleLoginPayload): Promise<AuthData> =>
+  apiClient.post('/auth/google', payload)
 
-export const logout = (): Promise<void> => {
-  if (MOCK) return Promise.resolve()
-  return apiClient.post('/auth/logout')
-}
+/** dev_otp is only ever present when OTP_DELIVERY=console on the server (no real email provider configured yet) — see server/src/common/utils/mailer.ts. */
+export const forgotPassword = (email: string): Promise<{ dev_otp?: string }> =>
+  apiClient.post('/auth/forgot-password', { email })
+
+export const resetPassword = (data: { email: string; otp: string; new_password: string }): Promise<void> =>
+  apiClient.post('/auth/reset-password', data)
+
+export const refreshToken = (): Promise<{ token: string; expires_in: number }> =>
+  apiClient.post('/auth/refresh', undefined, { _skipAuthRefresh: true } as AxiosRequestConfig)
+
+export const logout = (): Promise<void> =>
+  apiClient.post('/auth/logout')

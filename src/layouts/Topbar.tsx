@@ -11,7 +11,7 @@ const quickCreate = [
   { icon: FileText, label: 'New Request', to: '/requests/new' },
   { icon: Building2, label: 'New Dealer', to: '/dealers/new' },
   { icon: UserPlus, label: 'New Prospect', to: '/prospects/new' },
-  { icon: MapPin, label: 'New Visit', to: '/visits' },
+  { icon: MapPin, label: 'New Visit', to: '/visits/new' },
 ]
 
 export default function Topbar({ title }: { title?: string }) {

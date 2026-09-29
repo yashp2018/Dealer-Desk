@@ -11,6 +11,9 @@ import {
 } from 'lucide-react'
 import { getDashboard } from '../../api/myDay'
 import { useNotifications } from '../../hooks/useNotifications'
+import { useAuth } from '../../hooks/useAuth'
+import { useCalendarData } from '../../hooks/useCalendar'
+import { mapCalendarEvents, calendarColors, activityTypeLabels } from '../calendar/calendarEventMapper'
 import KpiCard from '../../components/cards/KpiCard'
 import SectionCard from '../../components/cards/SectionCard'
 import SkeletonCard from '../../components/loaders/SkeletonCard'
@@ -20,9 +23,81 @@ import PriorityBadge from '../../components/badges/PriorityBadge'
 import { relativeTime } from '../../lib/relativeTime'
 import { formatDate } from '../../lib/formatDate'
 
+function greeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
+// Local-date keys (not UTC-sliced) so "today" always means the viewer's own
+// calendar day, matching the same rule the main Calendar page uses.
+const toDateKey = (date: Date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function TodaysScheduleWidget() {
+  const nav = useNavigate()
+  const today = new Date()
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const { data, isLoading } = useCalendarData(toDateKey(today), toDateKey(tomorrow))
+
+  const events = (data ? mapCalendarEvents(data) : [])
+    .slice()
+    .sort((a, b) => a.start.localeCompare(b.start))
+
+  const openEvent = (e: ReturnType<typeof mapCalendarEvents>[number]) => {
+    if (e.isCalendarActivity) { nav('/calendar'); return }
+    nav(e.visitId ? `/visits/${e.visitId}` : `/requests/${e.requestId}`)
+  }
+
+  return (
+    <SectionCard
+      title="Today's Schedule"
+      action={
+        <button onClick={() => nav('/calendar')} className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+          Open calendar <ArrowRight className="h-3 w-3" />
+        </button>
+      }
+    >
+      {isLoading ? (
+        <div className="space-y-2 py-1">
+          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />)}
+        </div>
+      ) : events.length === 0 ? (
+        <EmptyState icon={CalendarDays} title="Nothing scheduled today" description="Visits, requests due, and tasks will show up here." />
+      ) : (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          {events.map((e) => (
+            <button
+              key={e.id}
+              onClick={() => openEvent(e)}
+              className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-5 px-5 transition-colors"
+            >
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: calendarColors[e.type] ?? calendarColors.request_due }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{e.title}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{e.dealerName || activityTypeLabels[e.type] || e.type}</p>
+              </div>
+              <div className="shrink-0 text-right text-xs text-slate-400 dark:text-slate-500">
+                {new Date(e.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  )
+}
+
 export default function DashboardPage() {
   const nav = useNavigate()
-  const { data, isLoading, isError, refetch } = useQuery({ queryKey: ['dashboard'], queryFn: getDashboard })
+  const { staff } = useAuth()
+  const { data, isLoading, isError, refetch, dataUpdatedAt, isFetching } = useQuery({ queryKey: ['dashboard'], queryFn: getDashboard })
   const { data: notifs = [] } = useNotifications()
 
   const unreadNotifs = notifs.filter((n) => !n.is_read).slice(0, 4)
@@ -60,6 +135,21 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
 
+      {/* ── HEADER ────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">{greeting()}{staff?.name ? `, ${staff.name.split(' ')[0]}` : ''}</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Here's what's happening across the desk today.</p>
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors shrink-0"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+          Updated {relativeTime(new Date(dataUpdatedAt).toISOString())}
+        </button>
+      </div>
+
       {/* ── TODAY ─────────────────────────────────────────────────────────── */}
       <div>
         <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Today</p>
@@ -72,6 +162,9 @@ export default function DashboardPage() {
           <KpiCard value={today.unassigned}        label="Unassigned"       icon={Users}         tone={today.unassigned > 0 ? 'p2' : 'default'} onClick={() => nav('/requests')} />
           <KpiCard value={today.overdue}           label="Overdue"          icon={Clock}         tone={today.overdue > 0 ? 'p2' : 'default'} />
           <KpiCard value={today.pending_approvals} label="Pending Approvals" icon={CheckCircle2} tone="default" />
+        </div>
+        <div className="mt-4">
+          <TodaysScheduleWidget />
         </div>
       </div>
 

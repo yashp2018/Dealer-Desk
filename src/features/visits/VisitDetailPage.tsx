@@ -58,8 +58,8 @@ export default function VisitDetailPage() {
 
   const { data: visit, isLoading, isError } = useVisit(vid)
   const { data: timeline = [] } = useVisitTimeline(vid)
-  const { data: dealer } = useDealer(visit?.dealer_id ?? 0)
-  const { data: contacts = [] } = useDealerContacts(visit?.dealer_id ?? 0)
+  const { data: dealer } = useDealer(visit?.dealer_id ?? '')
+  const { data: contacts = [] } = useDealerContacts(visit?.dealer_id ?? '')
   const mutations = useVisitMutations(vid)
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>

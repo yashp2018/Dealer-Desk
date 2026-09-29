@@ -24,7 +24,7 @@ export default function DesktopVisitDetailPage() {
   const nav = useNavigate()
   const { data: visit, isLoading, isError } = useVisit(vid)
   const { data: timeline = [] } = useVisitTimeline(vid)
-  const { data: allDealerRequests = [] } = useDealerRequests(visit?.dealer_id ?? 0)
+  const { data: allDealerRequests = [] } = useDealerRequests(visit?.dealer_id ?? '')
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
   if (isError || !visit) return <Alert type="danger" message="Visit not found." />

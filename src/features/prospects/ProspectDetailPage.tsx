@@ -1,21 +1,21 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useProspect, useProspectMutations } from '../../hooks/useProspects'
-import { useBootstrap } from '../../hooks/useBootstrap'
+import { useProspect, useProspectMutations, useProspectChecklist } from '../../hooks/useProspects'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import Spinner from '../../components/loaders/Spinner'
 import Alert from '../../components/alerts/Alert'
 import Breadcrumb from '../../layouts/Breadcrumb'
 import { useUiStore } from '../../stores/uiStore'
+import { canSetProspectStage } from '../../lib/prospectStages'
 
-const STAGES = ['contacted', 'negotiation', 'onboarding', 'converted']
+const STAGES = ['new', 'contacted', 'qualified', 'visit_planned', 'visit_completed', 'onboarding', 'approved', 'converted', 'dropped']
 
 export default function ProspectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const pid = Number(id)
   const nav = useNavigate()
   const { data: prospect, isLoading, isError } = useProspect(pid)
-  const { data: bs } = useBootstrap()
+  const { data: checklist = [] } = useProspectChecklist(pid)
   const mutations = useProspectMutations(pid)
   const addToast = useUiStore((s) => s.addToast)
   const [confirmConvert, setConfirmConvert] = useState(false)
@@ -31,40 +31,61 @@ export default function ProspectDetailPage() {
         <p className="text-sm text-gray-500 mt-0.5">{prospect.contact_name} · {prospect.email} · {prospect.city}</p>
         {/* Stage pipeline */}
         <div className="flex gap-2 mt-4 flex-wrap">
-          {STAGES.map((s) => (
-            <button key={s} onClick={() => mutations.setStage.mutate(s, { onSuccess: () => addToast('Stage updated', 'success') })}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${prospect.stage === s ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-600 hover:border-indigo-400'}`}>
-              {s}
-            </button>
-          ))}
+          {STAGES.map((s) => {
+            const isCurrent = prospect.stage === s
+            const allowed = canSetProspectStage(prospect.stage, s)
+            return (
+              <button key={s} disabled={!allowed}
+                onClick={() => mutations.setStage.mutate(s, {
+                  onSuccess: () => addToast('Stage updated', 'success'),
+                  onError: (e) => addToast(e.message ?? 'Failed to update stage', 'error'),
+                })}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${isCurrent ? 'bg-indigo-600 text-white border-indigo-600' : allowed ? 'border-gray-300 text-gray-600 hover:border-indigo-400' : 'border-gray-100 text-gray-300 cursor-not-allowed'}`}>
+                {s.replace(/_/g, ' ')}
+              </button>
+            )
+          })}
         </div>
-        <button onClick={() => setConfirmConvert(true)} className="mt-4 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-          Convert to Dealer
-        </button>
+        {prospect.stage === 'approved' && (
+          <button onClick={() => setConfirmConvert(true)} className="mt-4 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
+            Convert to Dealer
+          </button>
+        )}
       </div>
       {/* Onboarding checklist */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Onboarding Checklist</h3>
-        <div className="space-y-2">
-          {bs?.doc_types?.map((doc) => (
-            <label key={doc.id} className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" onChange={() => mutations.setOnboardingItem.mutate(doc.id, { onSuccess: () => addToast('Item updated', 'success') })}
-                className="h-4 w-4 rounded border-gray-300 text-indigo-600" />
-              <span className="text-sm text-gray-700">{doc.name}</span>
-            </label>
-          ))}
+      {checklist.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Onboarding Checklist</h3>
+          <div className="space-y-2">
+            {checklist.map((item) => (
+              <label key={item.id} className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={item.status === 'received' || item.status === 'verified'}
+                  onChange={(e) => mutations.setOnboardingItem.mutate(
+                    { item_id: Number(item.id), status: e.target.checked ? 'received' : 'pending' },
+                    { onSuccess: () => addToast('Item updated', 'success'), onError: (e) => addToast(e.message ?? 'Failed to update item', 'error') },
+                  )}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600" />
+                <span className="text-sm text-gray-700">{item.doc_name}{item.is_required && <span className="text-red-500 ml-0.5">*</span>}</span>
+                <span className="text-xs text-gray-400 ml-auto capitalize">{item.status}</span>
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       {confirmConvert && (
         <ConfirmModal
           title="Convert to Dealer"
           message={`Convert ${prospect.company_name} to a dealer? This cannot be undone.`}
           confirmLabel="Convert"
           loading={mutations.convert.isPending}
-          onConfirm={() => mutations.convert.mutate(undefined, { onSuccess: () => { addToast('Converted to dealer', 'success'); nav('/dealers') } })}
+          onConfirm={() => mutations.convert.mutate(undefined, {
+            onSuccess: () => { addToast('Converted to dealer', 'success'); nav('/dealers') },
+            onError: (e) => addToast(e.message ?? 'Failed to convert', 'error'),
+          })}
           onCancel={() => setConfirmConvert(false)}
         />
       )}
     </div>
   )
 }
+  

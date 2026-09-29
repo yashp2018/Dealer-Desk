@@ -1,6 +1,6 @@
 import { relativeTime } from '../../lib/relativeTime'
 
-interface Entry { id: number; created_at: string; actor_name: string; event_type: string; summary: string }
+interface Entry { id: number | string; created_at: string; actor_name: string; event_type: string; summary: string }
 
 export default function Timeline({ entries }: { entries: Entry[] }) {
   if (!entries.length) return <p className="text-sm text-gray-400 py-4">No activity yet.</p>

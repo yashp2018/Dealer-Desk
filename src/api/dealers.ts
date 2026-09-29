@@ -1,11 +1,33 @@
 import apiClient from './client'
-import type { Dealer, DealerContact, DealerUpdatePayload, DealerPortal, DealerRequest, Request, TimelineEntry, Visit } from './types'
+import type {
+  CreateDealerPayload,
+  Dealer,
+  DealerContact,
+  DealerImportCandidate,
+  DealerImportResult,
+  DealerUpdatePayload,
+  Request,
+  TimelineEntry,
+  Visit,
+} from './types'
 
-export const getDealers = (params?: Record<string, string>): Promise<{ items: Dealer[]; meta?: Record<string, unknown> }> =>
+export const getDealers = (params?: Record<string, string>): Promise<Dealer[]> =>
   apiClient.get('/dealers', { params })
 
 export const getDealer = (id: string): Promise<Dealer> =>
   apiClient.get(`/dealers/${id}`)
+
+export const createDealer = (data: CreateDealerPayload): Promise<Dealer> =>
+  apiClient.post('/dealers', data)
+
+export const importDealers = (file: File): Promise<DealerImportResult> => {
+  const form = new FormData()
+  form.append('file', file)
+  return apiClient.post('/dealers/import', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+}
+
+export const getImportCandidates = (q?: string): Promise<DealerImportCandidate[]> =>
+  apiClient.get('/dealers/import/candidates', { params: q ? { q } : undefined })
 
 export const updateDealer = (id: string, data: DealerUpdatePayload): Promise<Dealer> =>
   apiClient.put(`/dealers/${id}`, data)
@@ -24,13 +46,3 @@ export const getDealerVisits = (id: string): Promise<Visit[]> =>
 
 export const getDealerTimeline = (id: string): Promise<TimelineEntry[]> =>
   apiClient.get(`/dealers/${id}/timeline`)
-
-// ── Dealer Portal endpoints ───────────────────────────────────────────────────
-
-/** Get the authenticated dealer's own profile (safe fields only). */
-export const getMyDealer = (): Promise<DealerPortal> =>
-  apiClient.get('/dealers/me')
-
-/** Get the authenticated dealer's own requests. */
-export const getMyRequests = (params?: Record<string, string>): Promise<{ items: DealerRequest[]; meta?: Record<string, unknown> }> =>
-  apiClient.get('/dealers/me/requests', { params })

@@ -6,6 +6,7 @@ import SectionCard from '../../components/cards/SectionCard'
 import Spinner from '../../components/loaders/Spinner'
 import Alert from '../../components/alerts/Alert'
 import { useUiStore } from '../../stores/uiStore'
+import { todayForDateInput } from '../../lib/formatDate'
 import type { VisitOutcomePayload } from '../../api/types'
 
 // Only outcomes the backend VisitOutcomePayload supports
@@ -146,7 +147,7 @@ export default function VisitCapturePage() {
             <input
               type="date"
               {...register('next_at')}
-              min={new Date().toISOString().slice(0, 10)}
+              min={todayForDateInput()}
               className="w-full border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>

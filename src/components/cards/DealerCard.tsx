@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 
-interface Dealer { id: number; code: string; name: string; tier_name: string; city: string; open_requests: number; overdue_requests: number; health: string }
+interface Dealer { id: string; code: string; name: string; tier_name: string; city: string; open_requests: number; overdue_requests: number; health: string }
 
 const healthColor: Record<string, string> = { good: 'text-green-600', warning: 'text-amber-600', critical: 'text-red-600' }
 

@@ -20,6 +20,8 @@ export interface AuthData {
   expires_in: number
   staff: Staff
   ref_block: string
+  /** Also set as a JS-readable cookie — client.ts reads the cookie directly rather than this field. */
+  csrf_token?: string
 }
 
 export interface LoginPayload {
@@ -79,6 +81,12 @@ export interface DocType {
   name: string
 }
 
+export interface ServiceCategory {
+  id: string
+  name: string
+  slug: string
+}
+
 export interface DealerPickerItem {
   id: string
   code: string
@@ -104,6 +112,7 @@ export interface Bootstrap {
   types: RequestType[]
   visit_types: VisitType[]
   doc_types: DocType[]
+  service_categories: ServiceCategory[]
   dealers: DealerPickerItem[]
   staff: Staff[]
 }
@@ -157,6 +166,33 @@ export interface DealerContact {
   is_primary: boolean
 }
 
+export interface CreateDealerPayload {
+  name: string
+  display_name?: string
+  tier_id: string
+  territory_id: string
+  city?: string
+  state_normalized?: string
+  phone_primary?: string
+  whatsapp_phone?: string
+  owner_staff_id?: string
+  import_candidate_id?: string
+}
+
+export interface DealerImportCandidate {
+  id: string
+  name: string
+  city: string | null
+  phone_primary: string | null
+  state_normalized: string | null
+}
+
+export interface DealerImportResult {
+  total_rows: number
+  imported: number
+  skipped_duplicate: number
+}
+
 export interface DealerUpdatePayload {
   display_name?: string
   phone_primary?: string
@@ -187,6 +223,18 @@ export interface Prospect {
   source: string
   converted_dealer_id: string | null
   created_at: string
+}
+
+export interface CreateProspectPayload {
+  company_name: string
+  contact_name?: string
+  email?: string
+  phone?: string
+  whatsapp?: string
+  city?: string
+  state_normalized?: string
+  owner_staff_id: number
+  source?: string
 }
 
 export interface OnboardingItem {
@@ -225,7 +273,12 @@ export interface Request {
   done_at: string | null
 }
 
-/** Safe request DTO for dealer portal */
+/**
+ * Safe request DTO for the dealer portal. No priority, due_at, or any other
+ * internal-workflow field — `status` is already a coarse dealer-facing label
+ * ("Received" / "In Progress" / "Completed" / "Cancelled"), not the raw
+ * internal status string.
+ */
 export interface DealerRequest {
   id: string
   ref_no: string
@@ -233,15 +286,24 @@ export interface DealerRequest {
   title: string
   description: string | null
   status: string
-  priority: number
-  due_at: string | null
+  /** The dealer's own preferred appointment time, if they set one when submitting. */
+  scheduled_at: string | null
   created_at: string
   updated_at: string
 }
 
+/** Dealer-safe timeline: only 'created' / 'status_changed', reworded generically. */
+export interface PortalTimelineEntry {
+  id: number
+  created_at: string
+  event_type: string
+  summary: string
+}
+
 export interface RequestDetails {
   request_id: string
-  fields: Record<string, string>
+  /** One entry per repeated field group (e.g. one per vehicle on a warranty claim). */
+  fields: Record<string, string>[]
 }
 
 export interface RequestLine {
@@ -262,6 +324,12 @@ export interface TimelineEntry {
   summary: string
 }
 
+export interface RequestLineInput {
+  description: string
+  qty: number
+  unit_rate?: number
+}
+
 export interface CreateRequestPayload {
   dealer_id: string
   type_id: string
@@ -270,25 +338,36 @@ export interface CreateRequestPayload {
   priority?: number
   owner_staff_id?: string
   scheduled_at?: string
-  fields?: Record<string, string>
+  /** One entry per repeated field group (e.g. one per vehicle on a warranty claim). */
+  fields?: Record<string, string>[]
+  lines?: RequestLineInput[]
   client_uuid?: string
 }
 
-/** Dealer portal request creation — no dealer_id */
+/** Dealer portal request creation — no dealer_id, no priority (staff-only). */
 export interface DealerCreateRequestPayload {
   type_id: string
   title?: string
   description?: string
-  priority?: number
   scheduled_at?: string
-  fields?: Record<string, string>
+  fields?: Record<string, string>[]
+  lines?: RequestLineInput[]
   client_uuid?: string
+}
+
+/** Dealer-editable subset of their own dealer profile — tier/territory/owner are staff-controlled and not included. */
+export interface DealerProfileUpdatePayload {
+  display_name?: string
+  phone_primary?: string
+  whatsapp_phone?: string
+  city?: string
+  state_normalized?: string
 }
 
 // ─── Visit ────────────────────────────────────────────────────────────────────
 
 export interface Visit {
-  id: string
+  id: number
   ref: string
   ref_no: string
   dealer_id: string | null
@@ -313,10 +392,27 @@ export interface VisitOutcomePayload {
   next_at?: string
 }
 
+export interface VisitAgendaItem {
+  label: string
+  done: boolean
+}
+
+export interface VisitAttachment {
+  id: number
+  visit_id: number
+  file_name: string
+  mime_type: string
+  size_bytes: number
+  uploaded_by_name: string
+  created_at: string
+  /** Relative to the API base; requires the same auth header as any other API call — fetch it, don't use it as a bare <img src>. */
+  url: string
+}
+
 // ─── Notification ─────────────────────────────────────────────────────────────
 
 export interface Notification {
-  id: string
+  id: number
   title: string
   body: string
   message: string

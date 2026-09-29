@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { useBootstrap } from '../../hooks/useBootstrap'
 import { useCreateRequest } from '../../hooks/useRequests'
-import RequestDynamicFields from './RequestDynamicFields'
+import { isFieldGroupComplete } from './RequestDynamicFields'
+import RepeatableFieldGroups from '../../components/forms/RepeatableFieldGroups'
+import RequestLineItemsEditor from '../../components/forms/RequestLineItemsEditor'
 import Breadcrumb from '../../layouts/Breadcrumb'
 import { useUiStore } from '../../stores/uiStore'
 import { useAuth } from '../../hooks/useAuth'
-import type { CreateRequestPayload } from '../../api/types'
+import type { CreateRequestPayload, RequestLineInput } from '../../api/types'
 
 export default function RequestFormPage() {
   const nav = useNavigate()
@@ -16,24 +18,33 @@ export default function RequestFormPage() {
   const addToast = useUiStore((s) => s.addToast)
   const { isDealer } = useAuth()
   const [typeId, setTypeId] = useState<string | null>(null)
+  const [lines, setLines] = useState<RequestLineInput[]>([])
+  const [fieldGroups, setFieldGroups] = useState<Record<string, string>[]>([{}])
   const { register, handleSubmit, formState: { errors } } = useForm()
 
-  // Dealers should not access this page — they use /dealer/requests/new
+  // Dealers should not access this page — they use /portal/requests/new
   if (isDealer) {
-    nav('/dealer/requests/new', { replace: true })
+    nav('/portal/requests/new', { replace: true })
     return null
   }
 
   const selectedType = bs?.types?.find((t) => t.id === typeId)
 
   const onSubmit = (values: Record<string, unknown>) => {
-    if (typeId === null) return
+    if (typeId === null || !selectedType) return
+    if (!fieldGroups.every((g) => isFieldGroupComplete(selectedType.fields, g))) {
+      addToast('Fill in all required fields for every entry', 'error')
+      return
+    }
+    const validLines = lines.filter((l) => l.description.trim() && l.qty > 0)
+    const usedFieldGroups = fieldGroups.filter((g) => Object.values(g).some((v) => v.trim()))
     const payload: CreateRequestPayload = {
       dealer_id: String(values.dealer_id),
       type_id: typeId,
       title: typeof values.title === 'string' ? values.title : undefined,
       description: typeof values.description === 'string' ? values.description : undefined,
-      fields: values.fields as Record<string, string> | undefined,
+      fields: usedFieldGroups.length > 0 ? usedFieldGroups : undefined,
+      lines: validLines.length > 0 ? validLines : undefined,
     }
     create.mutate(payload, {
       onSuccess: (r) => { addToast('Request created', 'success'); nav(`/requests/${(r as { id: string }).id}`) },
@@ -50,7 +61,7 @@ export default function RequestFormPage() {
           <label className="block text-sm font-medium text-gray-700 mb-2">Request Type</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {bs?.types?.map((t) => (
-              <button key={t.id} type="button" onClick={() => setTypeId(t.id)}
+              <button key={t.id} type="button" onClick={() => { setTypeId(t.id); setFieldGroups([{}]) }}
                 className={`border rounded-xl p-3 text-left text-sm transition-colors ${typeId === t.id ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'}`}>
                 <p className="font-medium text-gray-800">{t.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">SLA {t.sla_hours}h</p>
@@ -73,7 +84,13 @@ export default function RequestFormPage() {
               <input {...register('title', { required: 'Required' })} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               {errors.title && <p className="text-xs text-red-500 mt-1">{String(errors.title.message)}</p>}
             </div>
-            <RequestDynamicFields fields={selectedType.fields} mode="edit" register={(key) => register(key, { required: selectedType.fields.find((f) => f.key === key)?.is_required ? 'Required' : false })} errors={errors as Record<string, { message?: string }>} />
+            {selectedType.fields.length > 0 && (
+              <RepeatableFieldGroups fields={selectedType.fields} groups={fieldGroups} onChange={setFieldGroups} noun="entry" />
+            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Items <span className="text-gray-400 font-normal">(optional)</span></label>
+              <RequestLineItemsEditor lines={lines} onChange={setLines} />
+            </div>
             <button type="submit" disabled={create.isPending} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">
               {create.isPending ? 'Creating…' : 'Create Request'}
             </button>

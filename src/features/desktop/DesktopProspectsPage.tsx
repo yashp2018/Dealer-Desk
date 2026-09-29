@@ -10,21 +10,24 @@ import Alert from '../../components/alerts/Alert'
 import { relativeTime } from '../../lib/relativeTime'
 import { Plus } from 'lucide-react'
 
-const STAGES = ['received', 'contacted', 'visit_planned', 'visited', 'onboarding'] as const
+const STAGES = ['new', 'contacted', 'qualified', 'visit_planned', 'visit_completed', 'onboarding', 'approved'] as const
 const CLOSED = ['converted', 'dropped'] as const
 const ALL_STAGES = [...STAGES, ...CLOSED]
 
 const stageLabel: Record<string, string> = {
-  received: 'Received', contacted: 'Contacted', visit_planned: 'Visit Planned',
-  visited: 'Visited', onboarding: 'Onboarding', converted: 'Converted', dropped: 'Dropped',
+  new: 'New', contacted: 'Contacted', qualified: 'Qualified', visit_planned: 'Visit Planned',
+  visit_completed: 'Visit Completed', onboarding: 'Onboarding', approved: 'Approved',
+  converted: 'Converted', dropped: 'Dropped',
 }
 
 const stageColors: Record<string, string> = {
-  received: 'bg-gray-100 text-gray-600',
+  new: 'bg-gray-100 text-gray-600',
   contacted: 'bg-blue-100 text-blue-700',
+  qualified: 'bg-teal-100 text-teal-700',
   visit_planned: 'bg-purple-100 text-purple-700',
-  visited: 'bg-indigo-100 text-indigo-700',
+  visit_completed: 'bg-indigo-100 text-indigo-700',
   onboarding: 'bg-amber-100 text-amber-700',
+  approved: 'bg-cyan-100 text-cyan-700',
   converted: 'bg-green-100 text-green-700',
   dropped: 'bg-red-100 text-red-600',
 }
@@ -43,7 +46,7 @@ export default function DesktopProspectsPage() {
     return acc
   }, {})
 
-  const staffName = (id: number) => bs?.staff?.find((s) => s.id === id)?.name ?? `#${id}`
+  const staffName = (id: string) => bs?.staff?.find((s) => s.id === id)?.name ?? `#${id}`
 
   return (
     <div className="space-y-4">

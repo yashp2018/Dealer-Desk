@@ -5,13 +5,14 @@ import { useQuery } from '@tanstack/react-query'
 import { getQueue } from '../../api/myDay'
 import { useVisits } from '../../hooks/useVisits'
 import type { Request, Visit } from '../../api/types'
+import { todayForDateInput, toLocalDateKey } from '../../lib/formatDate'
 import Spinner from '../../components/loaders/Spinner'
 
 function RequestItem({ request }: { request: Request }) {
   const late = request.is_overdue
   const complete = request.completion_required > 0 && request.completion_done >= request.completion_required
   return (
-    <Link to={`/requests/${request.id}`} className="block border-b border-slate-100 bg-white px-4 py-4 last:border-0 active:bg-slate-50">
+    <Link to={`/mobile/request/${request.id}`} className="block border-b border-slate-100 bg-white px-4 py-4 last:border-0 active:bg-slate-50">
       <div className="flex items-start gap-3">
         <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${request.priority === 1 ? 'bg-red-500' : request.priority === 2 ? 'bg-amber-400' : 'bg-cyan-600'}`} />
         <div className="min-w-0 flex-1">
@@ -52,7 +53,7 @@ function VisitItem({ visit }: { visit: Visit }) {
 export default function MobileDayPage() {
   const queue = useQuery({ queryKey: ['queue'], queryFn: getQueue })
   const visits = useVisits()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayForDateInput()
 
   const { overdue, scheduled, unscheduled } = useMemo(() => {
     const requests = queue.data?.requests ?? []
@@ -62,7 +63,7 @@ export default function MobileDayPage() {
       unscheduled: requests.filter((request) => !request.is_overdue && !request.scheduled_at),
     }
   }, [queue.data])
-  const todayVisits = (visits.data ?? []).filter((visit) => visit.scheduled_at?.slice(0, 10) === today)
+  const todayVisits = (visits.data ?? []).filter((visit) => visit.scheduled_at && toLocalDateKey(visit.scheduled_at) === today)
 
   if (queue.isLoading || visits.isLoading) return <div className="flex justify-center py-24"><Spinner size="lg" /></div>
   if (queue.isError || visits.isError) return <div className="p-5"><div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-700">Live field data is unavailable. Try again when the service is reachable.</div></div>

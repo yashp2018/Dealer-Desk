@@ -4,11 +4,15 @@ interface Props {
   fields: Field[]
   mode: 'read' | 'edit'
   values?: Record<string, string>
-  register?: (key: string) => object
-  errors?: Record<string, { message?: string }>
+  onChange?: (key: string, value: string) => void
 }
 
-export default function RequestDynamicFields({ fields, mode, values = {}, register, errors = {} }: Props) {
+/** True when every required field in this group has a non-empty value. */
+export function isFieldGroupComplete(fields: Field[], values: Record<string, string>): boolean {
+  return fields.every((f) => !f.is_required || (values[f.key] ?? '').trim())
+}
+
+export default function RequestDynamicFields({ fields, mode, values = {}, onChange }: Props) {
   const sorted = [...fields].sort((a, b) => a.sort_order - b.sort_order)
   if (mode === 'read') {
     return (
@@ -30,17 +34,20 @@ export default function RequestDynamicFields({ fields, mode, values = {}, regist
             {f.label}{f.is_required && <span className="text-red-500 ml-0.5">*</span>}
           </label>
           {f.input_type === 'select' ? (
-            <select {...(register?.(f.key) ?? {})} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <select value={values[f.key] ?? ''} onChange={(e) => onChange?.(f.key, e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="">Select…</option>
               {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           ) : f.input_type === 'textarea' ? (
-            <textarea {...(register?.(f.key) ?? {})} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <textarea value={values[f.key] ?? ''} onChange={(e) => onChange?.(f.key, e.target.value)} rows={3}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           ) : (
-            <input type={f.input_type === 'number' ? 'number' : 'text'} {...(register?.(f.key) ?? {})} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <input type={f.input_type === 'number' ? 'number' : f.input_type === 'date' ? 'date' : 'text'}
+              value={values[f.key] ?? ''} onChange={(e) => onChange?.(f.key, e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
           )}
           {f.help_text && <p className="text-xs text-gray-400 mt-0.5">{f.help_text}</p>}
-          {errors[f.key] && <p className="text-xs text-red-500 mt-0.5">{errors[f.key].message}</p>}
         </div>
       ))}
     </div>

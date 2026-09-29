@@ -475,32 +475,12 @@
   font-family: inherit;
 }
 
-.fc-button-primary {
-  border-color: #cbd5e1 !important;
-  background-color: #ffffff !important;
-  color: #475569 !important;
-}
-.fc-button-primary:hover {
-  background-color: #f8fafc !important;
-}
-.dark .fc-button-primary {
-  border-color: #475569 !important;
-  background-color: #1e293b !important;
-  color: #cbd5e1 !important;
-}
-.dark .fc-button-primary:hover {
-  background-color: #334155 !important;
-}
-
-.fc-button-primary.fc-button-active {
-  border-color: #6366f1 !important;
-  background-color: #4f46e5 !important;
-  color: #ffffff !important;
-}
-
-.fc-button-primary:not(:disabled):active {
-  background-color: #4338ca !important;
-}
+/* Button + "today" theming for this calendar now lives entirely in the
+   .field-calendar block below (CSS-variable based, teal accent) — these
+   generic !important rules used to silently win over it regardless of
+   scope, which is why the wired-up theme wouldn't actually show. Kept only
+   the rules below that .field-calendar doesn't cover (month/agenda view
+   internals) so nothing regresses for those views. */
 
 .fc-daygrid-day {
   border-color: #e2e8f0 !important;
@@ -514,13 +494,6 @@
 }
 .dark .fc-daygrid-day.fc-day-other {
   background-color: rgba(30, 41, 59, 0.2) !important;
-}
-
-.fc-daygrid-day.fc-day-today {
-  background-color: #eef2ff !important;
-}
-.dark .fc-daygrid-day.fc-day-today {
-  background-color: rgba(30, 27, 75, 0.3) !important;
 }
 
 .fc-daygrid-day-number {
@@ -789,6 +762,20 @@
 
 .field-calendar .fc-list-event:hover td {
   background: var(--fc-highlight-color);
+}
+
+/* System-generated events (Requests/Visits/Escalations) vs. user-created
+   activities (Task/Meeting/Reminder/etc.) — dashed outline marks the former
+   as reference-only items that can't be dragged/resized from this calendar. */
+.field-calendar .fc-timegrid-event.calendar-event-system,
+.field-calendar .fc-daygrid-event.calendar-event-system {
+  border: 2px dashed rgba(255, 255, 255, 0.55) !important;
+  opacity: 0.92;
+}
+
+.field-calendar .fc-timegrid-event.calendar-event-user,
+.field-calendar .fc-daygrid-event.calendar-event-user {
+  border: 2px solid rgba(255, 255, 255, 0.85) !important;
 }
 
 /* ---------- Scrollbar ---------- */

@@ -6,6 +6,10 @@
  * Responsibilities:
  *  - Read base URL from VITE_API_BASE_URL
  *  - Attach Authorization: Bearer <token> to every request
+ *  - Attach X-CSRF-Token (read from the csrf_token cookie) to every request —
+ *    the server only actually checks it on /auth/refresh and /auth/logout
+ *    (the only two routes authenticated purely by cookie), but attaching it
+ *    everywhere means no individual api/*.ts file has to remember to do it
  *  - Unwrap { message, data, meta } envelope
  *  - Handle 401 → attempt one token refresh → retry original request
  *  - If refresh fails → clear auth state → redirect to /login
@@ -51,7 +55,12 @@ export const apiClient: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
 })
 
-// ─── Request interceptor — attach token ───────────────────────────────────────
+// ─── Request interceptor — attach token + CSRF header ─────────────────────────
+
+function readCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'))
+  return match ? decodeURIComponent(match[1]) : null
+}
 
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (!BASE_URL) {
@@ -64,6 +73,12 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token && config.headers) {
     config.headers['Authorization'] = `Bearer ${token}`
   }
+
+  const csrfToken = readCookie('csrf_token')
+  if (csrfToken && config.headers) {
+    config.headers['X-CSRF-Token'] = csrfToken
+  }
+
   return config
 })
 

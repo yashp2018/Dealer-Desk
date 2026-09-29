@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useRequest, useRequestDetails, useRequestTimeline, useRequestMutations } from '../../hooks/useRequests'
+import { useRequest, useRequestDetails, useRequestTimeline, useRequestMutations, useRequestEscalations, useRequestLines } from '../../hooks/useRequests'
 import { useBootstrap } from '../../hooks/useBootstrap'
 import StatusBadge from '../../components/badges/StatusBadge'
 import PriorityBadge from '../../components/badges/PriorityBadge'
@@ -10,15 +10,18 @@ import Spinner from '../../components/loaders/Spinner'
 import Alert from '../../components/alerts/Alert'
 import Breadcrumb from '../../layouts/Breadcrumb'
 import { useUiStore } from '../../stores/uiStore'
+import { AlertTriangle } from 'lucide-react'
+import { formatDateTime } from '../../lib/formatDate'
 
 export default function RequestDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const rid = Number(id)
-  const { data: req, isLoading, isError } = useRequest(rid)
-  const { data: details } = useRequestDetails(rid)
-  const { data: timeline = [] } = useRequestTimeline(rid)
+  const { data: req, isLoading, isError } = useRequest(id!)
+  const { data: details } = useRequestDetails(id!)
+  const { data: timeline = [] } = useRequestTimeline(id!)
+  const { data: escalations = [] } = useRequestEscalations(id!)
+  const { data: lines = [] } = useRequestLines(id!)
   const { data: bs } = useBootstrap()
-  const mutations = useRequestMutations(rid)
+  const mutations = useRequestMutations(id!)
   const addToast = useUiStore((s) => s.addToast)
   const [note, setNote] = useState('')
 
@@ -63,11 +66,27 @@ export default function RequestDetailPage() {
           </div>
         </div>
       </div>
-      {/* Dynamic fields */}
-      {currentType && (details as { fields?: Record<string, string> })?.fields && (
+      {/* Dynamic fields — one card per repeated group (e.g. one per vehicle on a warranty claim) */}
+      {currentType && details?.fields?.map((group, i) => (
+        <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">
+            Details{details.fields.length > 1 ? ` — Entry ${i + 1}` : ''}
+          </h3>
+          <RequestDynamicFields fields={currentType.fields} mode="read" values={group} />
+        </div>
+      ))}
+      {/* Line items */}
+      {lines.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">Details</h3>
-          <RequestDynamicFields fields={currentType.fields} mode="read" values={(details as { fields: Record<string, string> }).fields} />
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Items Requested</h3>
+          <ul className="divide-y divide-gray-100">
+            {lines.map((l) => (
+              <li key={l.id} className="flex items-center justify-between py-2 text-sm">
+                <span className="text-gray-700">{l.description}</span>
+                <span className="text-gray-500 font-medium">×{l.qty}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {/* Notes */}
@@ -81,6 +100,22 @@ export default function RequestDetailPage() {
         <h3 className="text-sm font-semibold text-gray-700 mb-4">Timeline</h3>
         <Timeline entries={timeline as Parameters<typeof Timeline>[0]['entries']} />
       </div>
+      {/* Escalation history — exception info, kept small and out of the way */}
+      {escalations.length > 0 && (
+        <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-4">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 uppercase tracking-wide mb-2">
+            <AlertTriangle className="h-3.5 w-3.5" /> Escalation history
+          </h3>
+          <ul className="space-y-1.5">
+            {escalations.map((e) => (
+              <li key={e.id} className="text-xs text-amber-900">
+                <span className="font-medium">{e.rule_name}</span> — {e.action_taken}
+                <span className="text-amber-600"> · {formatDateTime(e.fired_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

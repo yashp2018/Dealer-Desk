@@ -6,13 +6,17 @@
 import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useBootstrap } from '../../hooks/useBootstrap'
+import { useCreateRequest } from '../../hooks/useRequests'
 import Breadcrumb from '../../layouts/Breadcrumb'
+import RequestLineItemsEditor from '../../components/forms/RequestLineItemsEditor'
 import { useUiStore } from '../../stores/uiStore'
+import type { CreateRequestPayload, RequestLineInput } from '../../api/types'
 
 export default function DesktopRequestNewPage() {
   const nav = useNavigate()
   const [params] = useSearchParams()
   const { data: bs } = useBootstrap()
+  const create = useCreateRequest()
   const addToast = useUiStore((s) => s.addToast)
 
   const [dealerId, setDealerId] = useState(params.get('dealer') ?? '')
@@ -25,6 +29,7 @@ export default function DesktopRequestNewPage() {
     const d = new Date(); d.setMinutes(0, 0, 0)
     return d.toISOString().slice(0, 16)
   })
+  const [lines, setLines] = useState<RequestLineInput[]>([])
 
   const selectedType = bs?.types?.find((t) => String(t.id) === typeId)
   const duePreview = selectedType
@@ -33,8 +38,21 @@ export default function DesktopRequestNewPage() {
 
   const handleSubmit = () => {
     if (!dealerId || !typeId) { addToast('Select a dealer and type', 'error'); return }
-    addToast('Request created', 'success')
-    nav('/desktop/requests')
+    const validLines = lines.filter((l) => l.description.trim() && l.qty > 0)
+    const payload: CreateRequestPayload = {
+      dealer_id: dealerId,
+      type_id: typeId,
+      title: title.trim() || undefined,
+      description: desc.trim() || undefined,
+      priority: priority ? Number(priority) : undefined,
+      owner_staff_id: ownerId || undefined,
+      scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+      lines: validLines.length > 0 ? validLines : undefined,
+    }
+    create.mutate(payload, {
+      onSuccess: (r) => { addToast('Request created', 'success'); nav(`/desktop/requests/${(r as { id: string }).id}`) },
+      onError: () => addToast('Failed to create request', 'error'),
+    })
   }
 
   return (
@@ -100,6 +118,10 @@ export default function DesktopRequestNewPage() {
                 <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Items <span className="text-gray-400">(optional)</span></label>
+                <RequestLineItemsEditor lines={lines} onChange={setLines} />
+              </div>
             </div>
           </div>
         </div>
@@ -150,9 +172,9 @@ export default function DesktopRequestNewPage() {
                 </tr>
               </tbody>
             </table>
-            <button onClick={handleSubmit}
-              className="mt-4 w-full bg-indigo-600 text-white text-sm py-2.5 rounded-lg hover:bg-indigo-700 font-medium">
-              Create Request
+            <button onClick={handleSubmit} disabled={create.isPending}
+              className="mt-4 w-full bg-indigo-600 text-white text-sm py-2.5 rounded-lg hover:bg-indigo-700 font-medium disabled:opacity-50">
+              {create.isPending ? 'Creating…' : 'Create Request'}
             </button>
           </div>
         </div>

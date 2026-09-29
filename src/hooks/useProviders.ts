@@ -12,7 +12,7 @@ export function useProviders(params?: api.ProviderListParams) {
   })
 }
 
-export function useProvider(id?: string) {
+export function useProvider(id?: number) {
   return useQuery({
     queryKey: ['providers', id],
     queryFn: () => api.getProvider(id!),
@@ -20,7 +20,7 @@ export function useProvider(id?: string) {
   })
 }
 
-export function useProviderServices(id?: string) {
+export function useProviderServices(id?: number) {
   return useQuery({
     queryKey: ['providers', id, 'services'],
     queryFn: () => api.getProviderServices(id!),
@@ -36,7 +36,7 @@ export function useCreateProvider() {
   })
 }
 
-export function useUpdateProvider(id: string) {
+export function useUpdateProvider(id: number) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (payload: Partial<api.Provider>) => api.updateProvider(id, payload),

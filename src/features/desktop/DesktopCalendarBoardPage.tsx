@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { useVisits } from '../../hooks/useVisits'
 import { useRequests } from '../../hooks/useRequests'
 import { useBootstrap } from '../../hooks/useBootstrap'
+import { localDateKey, toLocalDateKey, toLocalTimeKey } from '../../lib/formatDate'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 function startOfWeek(d: Date) {
@@ -19,9 +20,9 @@ function addDays(d: Date, n: number) {
   const r = new Date(d); r.setDate(r.getDate() + n); return r
 }
 
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10)
-}
+// Local calendar date, not UTC — this board is keyed by the viewer's own
+// day boundaries, matching how visits/requests are actually scheduled.
+const isoDate = localDateKey
 
 export default function DesktopCalendarBoardPage() {
   const nav = useNavigate()
@@ -43,8 +44,8 @@ export default function DesktopCalendarBoardPage() {
     days: days.reduce<Record<string, { visits: Visit[]; requests: Request[] }>>((acc, day) => {
       const d = isoDate(day)
       acc[d] = {
-        visits: (visits as Visit[]).filter((v) => v.owner_staff_id === member.id && v.scheduled_at?.slice(0, 10) === d),
-        requests: (requests as Request[]).filter((r) => r.owner_staff_id === member.id && r.scheduled_at?.slice(0, 10) === d),
+        visits: (visits as Visit[]).filter((v) => v.owner_staff_id === member.id && v.scheduled_at && toLocalDateKey(v.scheduled_at) === d),
+        requests: (requests as Request[]).filter((r) => r.owner_staff_id === member.id && r.scheduled_at && toLocalDateKey(r.scheduled_at) === d),
       }
       return acc
     }, {}),
@@ -105,7 +106,7 @@ export default function DesktopCalendarBoardPage() {
                               <button key={v.id} onClick={() => nav(`/desktop/visits/${v.id}`)}
                                 className="w-full text-left bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 text-xs hover:bg-blue-100 transition-colors">
                                 <p className="font-medium text-blue-800 truncate">{v.dealer_name}</p>
-                                <p className="text-blue-600">{v.scheduled_at?.slice(11, 16)} · {v.title}</p>
+                                <p className="text-blue-600">{v.scheduled_at ? toLocalTimeKey(v.scheduled_at) : ''} · {v.title}</p>
                               </button>
                             ))}
                             {cell.requests.map((r) => (

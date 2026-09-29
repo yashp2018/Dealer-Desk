@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
+  Check,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -9,16 +10,20 @@ import {
   Search,
   X,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { Link, useLocation } from 'react-router-dom'
+import { useCalendarData, useCalendarMutations } from '../../hooks/useCalendar'
 
-import { getCalendarData } from '../../api/calendar'
 import {
   mapCalendarEvents,
   calendarColors,
   activityTypeLabels,
+  ACTIVITY_TYPE_OPTIONS,
 } from './calendarEventMapper'
 import type { CalendarEvent } from './calendarEventMapper'
+import CalendarActivitySheet from './CalendarActivitySheet'
+import CalendarActivityForm, { emptyActivityFormValues } from './CalendarActivityForm'
+import CalendarActivityDetails from './CalendarActivityDetails'
+import { useUiStore } from '../../stores/uiStore'
 import Spinner from '../../components/loaders/Spinner'
 
 const HOUR_START = 8
@@ -98,14 +103,28 @@ const getEventTop = (event: CalendarEvent) => {
   )
 }
 
+const MIN_EVENT_HEIGHT = 48
+
 const getEventHeight = (event: CalendarEvent) => {
   const start = parseDate(event.start)
+  const end = event.end ? parseDate(event.end) : null
+  if (!start || !end || end.getTime() <= start.getTime()) return HOUR_HEIGHT - 8
 
-  // The existing CalendarEvent contract does not guarantee an end time.
-  // Keep cards readable until the backend exposes a real duration.
-  if (!start) return HOUR_HEIGHT - 8
+  const minutes = (end.getTime() - start.getTime()) / 60000
+  return Math.max(MIN_EVENT_HEIGHT, (minutes / 60) * HOUR_HEIGHT - 4)
+}
 
-  return HOUR_HEIGHT - 8
+/** Pixel offset within the timeline -> a 15-minute-snapped Date on the given day. */
+const pixelToSnappedTime = (offsetY: number, day: Date) => {
+  const rawMinutes = HOUR_START * 60 + (offsetY / HOUR_HEIGHT) * 60
+  // Floor to the enclosing 15-minute slot (tapping anywhere within e.g. the
+  // 2:30-2:45 block starts an activity at 2:30) rather than rounding to
+  // whichever mark is numerically closer.
+  const snapped = Math.floor(rawMinutes / 15) * 15
+  const clamped = Math.min(Math.max(snapped, HOUR_START * 60), HOUR_END * 60 - 15)
+  const result = new Date(day)
+  result.setHours(Math.floor(clamped / 60), clamped % 60, 0, 0)
+  return result
 }
 
 const eventHref = (event: CalendarEvent) => {
@@ -127,8 +146,12 @@ const eventIcon = (event: CalendarEvent) => {
   return '•'
 }
 
+type Sheet = { mode: 'create'; date: string; time: string } | { mode: 'details'; activityId: string } | null
+
 export default function MobilePlanningPage() {
   const todayKey = toKey(new Date())
+  const location = useLocation()
+  const addToast = useUiStore((s) => s.addToast)
 
   const [weekStart, setWeekStart] = useState(() =>
     startOfWeek(new Date()),
@@ -137,22 +160,18 @@ export default function MobilePlanningPage() {
   const [search, setSearch] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [activityTypeFilter, setActivityTypeFilter] = useState('')
+  const [sheet, setSheet] = useState<Sheet>(() =>
+    (location.state as { openCreate?: boolean } | null)?.openCreate
+      ? { mode: 'create', date: todayKey, time: '09:00' }
+      : null,
+  )
 
   const start = toKey(weekStart)
   const end = toKey(addDays(weekStart, 7))
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    isError,
-    refetch,
-  } = useQuery({
-    queryKey: ['calendar', start, end],
-    queryFn: () => getCalendarData(start, end),
-    refetchOnWindowFocus: true,
-    staleTime: 30_000,
-  })
+  const { data, isLoading, isFetching, isError, refetch } = useCalendarData(start, end)
+  const mutations = useCalendarMutations()
 
   const events = useMemo(
     () =>
@@ -160,6 +179,7 @@ export default function MobilePlanningPage() {
         data ?? {
           requests: [],
           visits: [],
+          activities: [],
         },
       ),
     [data],
@@ -175,21 +195,34 @@ export default function MobilePlanningPage() {
 
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase()
-    if (!query) return events
-
-    return events.filter((event) =>
-      [
+    return events.filter((event) => {
+      if (activityTypeFilter && event.type !== activityTypeFilter) return false
+      if (!query) return true
+      return [
         event.title,
+        event.description,
         event.dealerName,
         event.ownerName,
         event.status,
         activityTypeLabels[event.type],
         eventKind(event),
-      ].some((value) =>
-        String(value ?? '').toLowerCase().includes(query),
-      ),
-    )
-  }, [events, search])
+      ].some((value) => String(value ?? '').toLowerCase().includes(query))
+    })
+  }, [events, search, activityTypeFilter])
+
+  const openCreateSheet = (date: Date, time?: string) => {
+    setSheet({ mode: 'create', date: toKey(date), time: time ?? '09:00' })
+  }
+
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Ignore clicks that landed on an event card — those handle their own click.
+    if ((e.target as HTMLElement).closest('[data-event-card]')) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const offsetY = e.clientY - rect.top
+    const dayObject = new Date(`${selectedDate}T12:00:00`)
+    const snapped = pixelToSnappedTime(offsetY, dayObject)
+    openCreateSheet(snapped, `${String(snapped.getHours()).padStart(2, '0')}:${String(snapped.getMinutes()).padStart(2, '0')}`)
+  }
 
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, CalendarEvent[]>()
@@ -296,13 +329,14 @@ export default function MobilePlanningPage() {
             <Filter className="h-4 w-4" />
           </button>
 
-          <Link
-            to="/mobile/capture"
-            aria-label="Add activity"
+          <button
+            type="button"
+            onClick={() => openCreateSheet(new Date(`${selectedDate}T09:00:00`), '09:00')}
+            aria-label="New calendar task"
             className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600"
           >
             <Plus className="h-5 w-5" />
-          </Link>
+          </button>
         </div>
 
         {showSearch && (
@@ -552,10 +586,19 @@ export default function MobilePlanningPage() {
                 </div>
 
                 <div
-                  className="relative"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Tap a time to create an activity"
+                  className="relative cursor-pointer"
                   style={{
                     height:
                       (HOUR_END - HOUR_START) * HOUR_HEIGHT,
+                  }}
+                  onClick={handleTimelineClick}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' && e.key !== ' ') return
+                    e.preventDefault()
+                    openCreateSheet(new Date(`${selectedDate}T09:00:00`), '09:00')
                   }}
                 >
                   {/* Hour lines */}
@@ -610,10 +653,12 @@ export default function MobilePlanningPage() {
                     const top = getEventTop(event)
                     const height = getEventHeight(event)
                     const href = eventHref(event)
+                    const isCompletedActivity = event.isCalendarActivity && event.status === 'completed'
 
                     const card = (
                       <div
-                        className="absolute left-2 right-2 overflow-hidden rounded-xl border bg-white p-2.5 shadow-sm dark:bg-slate-900"
+                        data-event-card
+                        className={`absolute left-2 right-2 overflow-hidden rounded-xl border bg-white p-2.5 shadow-sm dark:bg-slate-900 ${isCompletedActivity ? 'opacity-60' : ''}`}
                         style={{
                           top,
                           height,
@@ -639,7 +684,7 @@ export default function MobilePlanningPage() {
                               {eventKind(event)}
                             </p>
 
-                            <p className="mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white">
+                            <p className={`mt-0.5 truncate text-sm font-bold text-slate-900 dark:text-white ${isCompletedActivity ? 'line-through' : ''}`}>
                               {event.title || 'Activity'}
                             </p>
 
@@ -651,13 +696,18 @@ export default function MobilePlanningPage() {
 
                             <p className="mt-1 text-[9px] font-semibold text-slate-500 dark:text-slate-400">
                               {formatTime(event.start)}
-                              {event.priority
-                                ? ` · P${event.priority}`
-                                : ''}
+                              {/* Calendar activities are single-time (no user-facing end time); Requests/Visits keep their computed range. */}
+                              {!event.isCalendarActivity && event.end ? ` – ${formatTime(event.end)}` : ''}
+                              {event.priority ? ` · P${event.priority}` : ''}
+                              {event.reminderMinutes != null && event.reminderMinutes > 0 ? ` · 🔔 ${event.reminderMinutes}min` : ''}
                             </p>
                           </div>
 
-                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                          {isCompletedActivity ? (
+                            <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                          )}
                         </div>
 
                         {event.status && (
@@ -674,9 +724,25 @@ export default function MobilePlanningPage() {
                       </div>
                     )
 
+                    if (event.isCalendarActivity && event.activityId) {
+                      return (
+                        <button
+                          type="button"
+                          key={event.id}
+                          data-event-card
+                          onClick={() => setSheet({ mode: 'details', activityId: event.activityId! })}
+                          className="absolute inset-x-0 block text-left"
+                          style={{ top, height }}
+                        >
+                          {card}
+                        </button>
+                      )
+                    }
+
                     return href ? (
                       <Link
                         key={event.id}
+                        data-event-card
                         to={href}
                         className="absolute inset-x-0 block"
                         style={{
@@ -689,6 +755,7 @@ export default function MobilePlanningPage() {
                     ) : (
                       <div
                         key={event.id}
+                        data-event-card
                         className="absolute inset-x-0"
                         style={{
                           top,
@@ -709,15 +776,16 @@ export default function MobilePlanningPage() {
                   No activities scheduled
                 </p>
                 <p className="mt-1 text-[10px] text-slate-400">
-                  This day is clear.
+                  Tap any time slot to create a task.
                 </p>
-                <Link
-                  to="/mobile/capture"
-                  className="mt-4 inline-flex rounded-xl bg-teal-600 px-4 py-2.5 text-xs font-bold text-white"
+                <button
+                  type="button"
+                  onClick={() => openCreateSheet(new Date(`${selectedDate}T09:00:00`), '09:00')}
+                  className="mt-4 inline-flex items-center rounded-xl bg-teal-600 px-4 py-2.5 text-xs font-bold text-white"
                 >
                   <Plus className="mr-1.5 h-4 w-4" />
-                  Create request
-                </Link>
+                  Create Task
+                </button>
               </div>
             )}
           </section>
@@ -767,6 +835,14 @@ export default function MobilePlanningPage() {
                     </div>
                   )
 
+                  if (event.isCalendarActivity && event.activityId) {
+                    return (
+                      <button type="button" key={event.id} onClick={() => setSheet({ mode: 'details', activityId: event.activityId! })} className="block w-full text-left">
+                        {row}
+                      </button>
+                    )
+                  }
+
                   return href ? (
                     <Link key={event.id} to={href}>
                       {row}
@@ -802,8 +878,10 @@ export default function MobilePlanningPage() {
 
       {/* Mobile filter sheet */}
       {showFilters && (
-        <div className="fixed inset-0 z-[60] flex items-end bg-slate-950/50">
-          <div className="w-full rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] dark:bg-slate-900">
+        <div className="fixed inset-0 z-[60]">
+          <button type="button" aria-label="Close filters" onClick={() => setShowFilters(false)} className="absolute inset-0 bg-slate-950/50" />
+          {/* Re-declared left-1/2 + max-w-md — see the comment in CalendarActivitySheet.tsx for why fixed/absolute descendants need this even though the mobile shell itself is max-w-md. */}
+          <div className="absolute bottom-0 left-1/2 w-full max-w-md -translate-x-1/2 rounded-t-3xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] dark:bg-slate-900">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-teal-600">
@@ -822,10 +900,31 @@ export default function MobilePlanningPage() {
               </button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              Search is available above. Additional event filters
-              should be connected to the real backend filter fields
-              before adding fake filter values.
+            <div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Activity type</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActivityTypeFilter('')}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${activityTypeFilter === '' ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600'}`}
+                >
+                  All
+                </button>
+                {ACTIVITY_TYPE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setActivityTypeFilter(opt.value)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${activityTypeFilter === opt.value ? 'border-teal-600 bg-teal-50 text-teal-700' : 'border-slate-200 text-slate-600'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="mt-4 text-xs text-slate-500">
+              Employee, priority and status filters are available on the desktop calendar.
             </p>
 
             <button
@@ -839,14 +938,36 @@ export default function MobilePlanningPage() {
         </div>
       )}
 
-      {/* Floating action */}
-      <Link
-        to="/mobile/capture"
-        aria-label="Create activity"
-        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 flex h-13 w-13 items-center justify-center rounded-full bg-teal-600 text-white shadow-xl"
-      >
-        <Plus className="h-6 w-6" />
-      </Link>
+      {/*
+        No separate floating action button here — MobileLayout already
+        provides a persistent FAB + quick-actions sheet (with a Calendar
+        Task option) when this page is embedded in the /mobile shell.
+        Creation is still reachable via the header "+", tapping an empty
+        time slot, or the empty-day CTA.
+      */}
+
+      {sheet?.mode === 'create' && (
+        <CalendarActivitySheet title="New Task" onClose={() => setSheet(null)}>
+          <CalendarActivityForm
+            initial={emptyActivityFormValues(sheet.date, sheet.time)}
+            submitting={mutations.create.isPending}
+            size="mobile"
+            onCancel={() => setSheet(null)}
+            onSubmit={(values) =>
+              mutations.create.mutate(values, {
+                onSuccess: () => { addToast('Task created successfully', 'success'); setSheet(null) },
+                onError: (e) => addToast(e.message ?? 'Unable to create task.', 'error'),
+              })
+            }
+          />
+        </CalendarActivitySheet>
+      )}
+
+      {sheet?.mode === 'details' && (
+        <CalendarActivitySheet title="Activity Details" onClose={() => setSheet(null)}>
+          <CalendarActivityDetails activityId={sheet.activityId} onClose={() => setSheet(null)} size="mobile" />
+        </CalendarActivitySheet>
+      )}
     </div>
   )
 }

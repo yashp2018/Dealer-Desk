@@ -1,10 +1,10 @@
 import apiClient from './client'
-import type { Request, DealerRequest, RequestDetails, RequestLine, TimelineEntry, CreateRequestPayload, DealerCreateRequestPayload } from './types'
+import type { Request, RequestDetails, RequestLine, TimelineEntry, CreateRequestPayload } from './types'
 
-export const getRequests = (params?: Record<string, string>): Promise<{ items: Request[]; meta?: Record<string, unknown> }> =>
+export const getRequests = (params?: Record<string, string>): Promise<Request[]> =>
   apiClient.get('/requests', { params })
 
-export const searchRequests = (q: string): Promise<{ items: Request[] }> =>
+export const searchRequests = (q: string): Promise<Request[]> =>
   apiClient.get('/requests', { params: { q } })
 
 export const getRequest = (id: string): Promise<Request> =>
@@ -18,6 +18,17 @@ export const getRequestLines = (id: string): Promise<RequestLine[]> =>
 
 export const getRequestTimeline = (id: string): Promise<TimelineEntry[]> =>
   apiClient.get(`/requests/${id}/timeline`)
+
+export interface EscalationLogEntry {
+  id: number
+  rule_id: number
+  rule_name: string
+  action_taken: string
+  fired_at: string
+}
+
+export const getRequestEscalations = (id: string): Promise<EscalationLogEntry[]> =>
+  apiClient.get(`/requests/${id}/escalations`)
 
 export const createRequest = (data: CreateRequestPayload): Promise<Request> =>
   apiClient.post('/requests', data)
@@ -49,16 +60,5 @@ export const saveRequestHandling = (id: string, data: { owner_staff_id?: string;
 export const saveRequestDetails = (id: string, fields: Record<string, string>): Promise<RequestDetails> =>
   apiClient.post(`/requests/${id}/details`, { fields })
 
-// ── Dealer Portal endpoints ───────────────────────────────────────────────────
-
-/** GET /requests/my — dealer portal: own requests (server-side filtered). */
-export const getMyRequests = (params?: Record<string, string>): Promise<{ items: DealerRequest[]; meta?: Record<string, unknown> }> =>
-  apiClient.get('/requests/my', { params })
-
-/** GET /requests/:id — dealer portal: own request detail. */
-export const getMyRequest = (id: string): Promise<DealerRequest> =>
-  apiClient.get(`/requests/${id}`)
-
-/** POST /requests/dealer — dealer portal: create request (dealerId from auth). */
-export const createDealerRequest = (data: DealerCreateRequestPayload): Promise<DealerRequest> =>
-  apiClient.post('/requests/dealer', data)
+export const deleteRequest = (id: string): Promise<void> =>
+  apiClient.delete(`/requests/${id}`)

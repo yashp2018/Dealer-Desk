@@ -9,7 +9,7 @@ import apiClient from './client'
 import type { ServiceItem } from './services'
 
 export interface Provider {
-  _id: string
+  id: number
   providerCode: string
   name: string
   slug: string
@@ -39,19 +39,17 @@ export interface ProviderListParams {
   verificationStatus?: string
 }
 
-export type CreateProviderPayload = Omit<Provider, '_id' | 'serviceCount' | 'rating' | 'reviewCount' | 'createdAt' | 'updatedAt'>
+export type CreateProviderPayload = Omit<Provider, 'id' | 'serviceCount' | 'rating' | 'reviewCount' | 'createdAt' | 'updatedAt'>
 
-export async function getProviders(params?: ProviderListParams): Promise<{ items: Provider[]; meta?: Record<string, unknown> }> {
-  const response = await apiClient.get('/providers', { params }) as Provider[] | { items: Provider[] }
-  if (Array.isArray(response)) return { items: response }
-  return response
+export async function getProviders(params?: ProviderListParams): Promise<Provider[]> {
+  return apiClient.get('/providers', { params })
 }
 
-export async function getProvider(id: string): Promise<Provider> {
+export async function getProvider(id: number): Promise<Provider> {
   return apiClient.get(`/providers/${id}`)
 }
 
-export async function getProviderServices(id: string): Promise<ServiceItem[]> {
+export async function getProviderServices(id: number): Promise<ServiceItem[]> {
   return apiClient.get(`/providers/${id}/services`)
 }
 
@@ -59,10 +57,10 @@ export async function createProvider(payload: Partial<CreateProviderPayload>): P
   return apiClient.post('/providers', payload)
 }
 
-export async function updateProvider(id: string, payload: Partial<Provider>): Promise<Provider> {
+export async function updateProvider(id: number, payload: Partial<Provider>): Promise<Provider> {
   return apiClient.patch(`/providers/${id}`, payload)
 }
 
-export async function deleteProvider(id: string): Promise<void> {
+export async function deleteProvider(id: number): Promise<void> {
   await apiClient.delete(`/providers/${id}`)
 }

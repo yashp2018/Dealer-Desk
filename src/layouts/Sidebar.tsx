@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Radio, CalendarDays, Building2, UserPlus,
   FileText, MapPin, BarChart2, Settings, Bell, ChevronLeft, ChevronRight,
+  Wrench, Store,
 } from 'lucide-react'
 import { useUiStore } from '../stores/uiStore'
 import { useNotifications } from '../hooks/useNotifications'
@@ -16,6 +17,8 @@ const internalNav = [
   { to: '/prospects', icon: UserPlus, label: 'Prospects' },
   { to: '/requests', icon: FileText, label: 'Requests' },
   { to: '/visits', icon: MapPin, label: 'Visits' },
+  { to: '/services', icon: Wrench, label: 'Services' },
+  { to: '/providers', icon: Store, label: 'Providers' },
   { to: '/reports', icon: BarChart2, label: 'Reports' },
   { to: '/notifications', icon: Bell, label: 'Notifications', badge: true },
   { to: '/setup', icon: Settings, label: 'Setup' },
@@ -27,7 +30,7 @@ export default function Sidebar() {
   const { isAdmin, isStaff } = useAuth()
   const unread = notifs.filter((n) => !n.is_read).length
 
-  // Dealer users should never reach this sidebar — they use DealerPortalLayout.
+  // Dealer users should never reach this sidebar — they use PortalLayout (/portal).
   // This sidebar is only for admin/staff.
   const nav = (isAdmin || isStaff) ? internalNav : []
 

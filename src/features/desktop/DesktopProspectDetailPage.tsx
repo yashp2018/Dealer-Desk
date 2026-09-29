@@ -5,18 +5,21 @@
  */
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useProspect, useProspectMutations, useProspectVisits } from '../../hooks/useProspects'
+import { useProspect, useProspectMutations, useProspectVisits, useProspectChecklist } from '../../hooks/useProspects'
+import { useCreateVisit } from '../../hooks/useVisits'
 import { useBootstrap } from '../../hooks/useBootstrap'
 import ConfirmModal from '../../components/modals/ConfirmModal'
 import Spinner from '../../components/loaders/Spinner'
 import Alert from '../../components/alerts/Alert'
 import Breadcrumb from '../../layouts/Breadcrumb'
 import { useUiStore } from '../../stores/uiStore'
-import { formatDateTime } from '../../lib/formatDate'
+import { formatDateTime, nowForDatetimeLocal } from '../../lib/formatDate'
+import { canSetProspectStage } from '../../lib/prospectStages'
 
 const STAGE_LABELS: Record<string, string> = {
-  received: 'Received', contacted: 'Contacted', visit_planned: 'Visit Planned',
-  visited: 'Visited', onboarding: 'Onboarding', converted: 'Converted', dropped: 'Dropped',
+  new: 'New', contacted: 'Contacted', qualified: 'Qualified', visit_planned: 'Visit Planned',
+  visit_completed: 'Visit Completed', onboarding: 'Onboarding', approved: 'Approved',
+  converted: 'Converted', dropped: 'Dropped',
 }
 
 export default function DesktopProspectDetailPage() {
@@ -25,11 +28,15 @@ export default function DesktopProspectDetailPage() {
   const nav = useNavigate()
   const { data: prospect, isLoading, isError } = useProspect(pid)
   const { data: prospectVisits = [] } = useProspectVisits(pid)
+  const { data: checklist = [] } = useProspectChecklist(pid)
   const { data: bs } = useBootstrap()
   const mutations = useProspectMutations(pid)
+  const createVisit = useCreateVisit()
   const addToast = useUiStore((s) => s.addToast)
   const [confirmConvert, setConfirmConvert] = useState(false)
   const [tierId, setTierId] = useState('')
+  const [visitTypeId, setVisitTypeId] = useState('')
+  const [visitAt, setVisitAt] = useState('')
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
   if (isError || !prospect) return <Alert type="danger" message="Prospect not found." />
@@ -74,16 +81,21 @@ export default function DesktopProspectDetailPage() {
             <div className="mt-4">
               <label className="block text-xs text-gray-500 mb-1">Pipeline Stage</label>
               <select defaultValue={p.stage}
-                onChange={(e) => mutations.setStage.mutate(e.target.value, { onSuccess: () => addToast('Stage updated', 'success') })}
+                onChange={(e) => mutations.setStage.mutate(e.target.value, {
+                  onSuccess: () => addToast('Stage updated', 'success'),
+                  onError: (err) => addToast(err.message ?? 'Failed to update stage', 'error'),
+                })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                {Object.entries(STAGE_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
+                {Object.entries(STAGE_LABELS)
+                  .filter(([k]) => canSetProspectStage(p.stage, k))
+                  .map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
               </select>
             </div>
 
             {/* Convert form */}
-            {p.stage === 'onboarding' && (
+            {p.stage === 'approved' && (
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <label className="block text-xs text-gray-500 mb-1">Tier</label>
                 <select value={tierId} onChange={(e) => setTierId(e.target.value)}
@@ -102,14 +114,28 @@ export default function DesktopProspectDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">New Visit</h3>
             <div className="space-y-2">
-              <select className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <select value={visitTypeId} onChange={(e) => setVisitTypeId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="">Select visit type…</option>
                 {bs?.visit_types?.map((vt) => <option key={vt.id} value={vt.id}>{vt.name}</option>)}
               </select>
-              <input type="datetime-local"
+              <input type="datetime-local" value={visitAt} min={nowForDatetimeLocal()} onChange={(e) => setVisitAt(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <button onClick={() => addToast('Visit scheduled', 'success')}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-sm rounded-lg py-1.5">
-                Schedule Visit
+              <button
+                onClick={() => {
+                  if (!visitTypeId || !visitAt) { addToast('Pick a visit type and date', 'error'); return }
+                  if (new Date(visitAt) < new Date()) { addToast('Visit time cannot be in the past', 'error'); return }
+                  createVisit.mutate(
+                    { prospect_id: pid, visit_type_id: Number(visitTypeId), scheduled_at: new Date(visitAt).toISOString() },
+                    {
+                      onSuccess: () => { addToast('Visit scheduled', 'success'); setVisitTypeId(''); setVisitAt('') },
+                      onError: (err) => addToast(err.message ?? 'Failed to schedule visit', 'error'),
+                    },
+                  )
+                }}
+                disabled={createVisit.isPending}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-sm rounded-lg py-1.5 disabled:opacity-50">
+                {createVisit.isPending ? 'Scheduling…' : 'Schedule Visit'}
               </button>
             </div>
           </div>
@@ -119,19 +145,22 @@ export default function DesktopProspectDetailPage() {
         <div className="lg:col-span-2 space-y-4">
 
           {/* Onboarding checklist */}
-          {p.stage === 'onboarding' && bs?.doc_types && (
+          {checklist.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-700">Onboarding Checklist</h3>
               </div>
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-gray-100">
-                  {bs.doc_types.map((doc) => (
-                    <tr key={doc.id}>
-                      <td className="px-5 py-3 text-gray-700">{doc.name}</td>
+                  {checklist.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-5 py-3 text-gray-700">{item.doc_name}{item.is_required && <span className="text-red-500 ml-0.5">*</span>}</td>
                       <td className="px-5 py-3 w-48">
-                        <select
-                          onChange={() => mutations.setOnboardingItem.mutate(doc.id, { onSuccess: () => addToast('Updated', 'success') })}
+                        <select defaultValue={item.status}
+                          onChange={(e) => mutations.setOnboardingItem.mutate(
+                            { item_id: Number(item.id), status: e.target.value },
+                            { onSuccess: () => addToast('Updated', 'success'), onError: (err) => addToast(err.message ?? 'Failed to update item', 'error') },
+                          )}
                           className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                           {['pending', 'received', 'verified', 'rejected'].map((s) => (
                             <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
@@ -176,8 +205,9 @@ export default function DesktopProspectDetailPage() {
           message={`Convert ${p.company_name} to a dealer? This cannot be undone.`}
           confirmLabel="Convert"
           loading={mutations.convert.isPending}
-          onConfirm={() => mutations.convert.mutate(undefined, {
-            onSuccess: () => { addToast('Converted to dealer', 'success'); nav('/desktop/dealers') }
+          onConfirm={() => mutations.convert.mutate(tierId ? Number(tierId) : undefined, {
+            onSuccess: () => { addToast('Converted to dealer', 'success'); nav('/desktop/dealers') },
+            onError: (e) => addToast(e.message ?? 'Failed to convert', 'error'),
           })}
           onCancel={() => setConfirmConvert(false)}
         />

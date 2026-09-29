@@ -2,9 +2,9 @@
  * Desktop — Request detail  (mirrors desktop/request_detail.php)
  * Identity header · facts strip · progress rail · run steps · context column
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useRequest, useRequestDetails, useRequestTimeline, useRequestMutations } from '../../hooks/useRequests'
+import { useRequest, useRequestDetails, useRequestTimeline, useRequestMutations, useRequestLines } from '../../hooks/useRequests'
 import { useBootstrap } from '../../hooks/useBootstrap'
 import RequestDynamicFields from '../requests/RequestDynamicFields'
 import StatusBadge from '../../components/badges/StatusBadge'
@@ -33,15 +33,26 @@ function StepBadge({ state }: { state: StepState }) {
 
 export default function DesktopRequestDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const rid = Number(id)
   const nav = useNavigate()
-  const { data: req, isLoading, isError } = useRequest(rid)
-  const { data: details } = useRequestDetails(rid)
-  const { data: timeline = [] } = useRequestTimeline(rid)
+  const { data: req, isLoading, isError } = useRequest(id!)
+  const { data: details } = useRequestDetails(id!)
+  const { data: timeline = [] } = useRequestTimeline(id!)
+  const { data: lines = [] } = useRequestLines(id!)
   const { data: bs } = useBootstrap()
-  const mutations = useRequestMutations(rid)
+  const mutations = useRequestMutations(id!)
   const addToast = useUiStore((s) => s.addToast)
   const [note, setNote] = useState('')
+  const [ownerStaffId, setOwnerStaffId] = useState('')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [handlingPriority, setHandlingPriority] = useState('')
+
+  useEffect(() => {
+    if (req) {
+      setOwnerStaffId(req.owner_staff_id ? String(req.owner_staff_id) : '')
+      setScheduledAt(req.scheduled_at ? req.scheduled_at.slice(0, 16) : '')
+      setHandlingPriority(String(req.priority))
+    }
+  }, [req?.id, req?.owner_staff_id, req?.scheduled_at, req?.priority])
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
   if (isError || !req) return <Alert type="danger" message="Request not found." />
@@ -159,19 +170,21 @@ export default function DesktopRequestDetailPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Owner</label>
-                  <select defaultValue={req.owner_staff_id ?? ''} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <select value={ownerStaffId} onChange={(e) => setOwnerStaffId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Unassigned</option>
                     {bs?.staff?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Schedule</label>
-                  <input type="datetime-local" defaultValue={req.scheduled_at?.slice(0, 16) ?? ''}
+                  <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Priority</label>
-                  <select defaultValue={req.priority} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <select value={handlingPriority} onChange={(e) => setHandlingPriority(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value={1}>P1 — Critical</option>
                     <option value={2}>P2 — High</option>
                     <option value={3}>P3 — Normal</option>
@@ -179,16 +192,47 @@ export default function DesktopRequestDetailPage() {
                 </div>
               </div>
               <div className="mt-3 flex gap-2">
-                <button onClick={() => addToast('Handling saved', 'success')}
-                  className="px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700">
-                  Save Handling
+                <button
+                  onClick={() => mutations.saveHandling.mutate(
+                    {
+                      owner_staff_id: ownerStaffId || undefined,
+                      scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+                      priority: handlingPriority ? Number(handlingPriority) : undefined,
+                    },
+                    {
+                      onSuccess: () => addToast('Handling saved', 'success'),
+                      onError: () => addToast('Failed to save handling', 'error'),
+                    },
+                  )}
+                  disabled={mutations.saveHandling.isPending}
+                  className="px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">
+                  {mutations.saveHandling.isPending ? 'Saving…' : 'Save Handling'}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Step 3 — Details */}
-          {currentType && (details as { fields?: Record<string, string> })?.fields && (
+          {/* Line items */}
+          {lines.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200">
+              <div className="px-5 py-3 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-700">Items Requested</span>
+              </div>
+              <div className="p-5">
+                <ul className="divide-y divide-gray-100">
+                  {lines.map((l) => (
+                    <li key={l.id} className="flex items-center justify-between py-2 text-sm">
+                      <span className="text-gray-700">{l.description}</span>
+                      <span className="text-gray-500 font-medium">×{l.qty}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3 — Details (one block per repeated field group) */}
+          {currentType && details?.fields && details.fields.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-200">
               <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">
@@ -197,10 +241,14 @@ export default function DesktopRequestDetailPage() {
                 </div>
                 <StepBadge state={detailsState} />
               </div>
-              <div className="p-5">
-                <RequestDynamicFields fields={currentType.fields} mode="read"
-                  values={(details as { fields: Record<string, string> }).fields} />
-                <p className="text-xs text-gray-400 mt-3">{filled}/{required} filled</p>
+              <div className="p-5 space-y-5">
+                {details.fields.map((group, i) => (
+                  <div key={i}>
+                    {details.fields.length > 1 && <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entry {i + 1}</p>}
+                    <RequestDynamicFields fields={currentType.fields} mode="read" values={group} />
+                  </div>
+                ))}
+                <p className="text-xs text-gray-400">{filled}/{required} filled</p>
               </div>
             </div>
           )}

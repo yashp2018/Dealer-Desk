@@ -18,15 +18,15 @@ import {
 const POLL_MS = 30_000
 
 interface Req {
-  id: number; ref: string; title: string; status: string; priority: number
+  id: string; ref: string; title: string; status: string; priority: number
   dealer_name: string; due_at: string | null; is_overdue: boolean
-  owner_name: string | null; owner_staff_id: number | null; scheduled_at: string | null
+  owner_name: string | null; owner_staff_id: string | null; scheduled_at: string | null
 }
 interface Visit {
   id: number; ref: string; dealer_name: string; visit_type: string
   scheduled_at: string; status: string; owner_name: string
 }
-interface TeamMember { staffid: number; name: string; open_count: number; overdue_count: number }
+interface TeamMember { staffid: string; name: string; open_count: number; overdue_count: number }
 
 function remainingLabel(dueAt: string | null): { label: string; urgent: boolean } {
   if (!dueAt) return { label: '—', urgent: false }

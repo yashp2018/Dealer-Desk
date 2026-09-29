@@ -1,13 +1,15 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate } from 'react-router-dom'
-import { v4 as uuidv4 } from 'uuid'
+import { useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { login } from '../../api/auth'
 import { useAuthStore } from '../../stores/authStore'
+import { getDeviceId } from '../../lib/deviceId'
+import GoogleSignInButton from '../../components/auth/GoogleSignInButton'
 import { useState } from 'react'
 import { Eye, EyeOff, Building2, Shield, Zap, BarChart3 } from 'lucide-react'
+import type { AuthData } from '../../api/types'
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -15,13 +17,6 @@ const schema = z.object({
   remember: z.boolean().optional(),
 })
 type FormValues = z.infer<typeof schema>
-
-function getDeviceId(): string {
-  const key = 'dd-device-id'
-  let id = localStorage.getItem(key)
-  if (!id) { id = uuidv4(); localStorage.setItem(key, id) }
-  return id
-}
 
 const features = [
   { icon: Building2, title: 'Dealer 360°', desc: 'Complete dealer relationship management' },
@@ -41,6 +36,12 @@ export default function LoginPage() {
     defaultValues: { remember: false },
   })
 
+  const handleAuthSuccess = (data: AuthData) => {
+    loginAction(data.token, data.expires_in, data.staff, data.ref_block, getDeviceId())
+    const dest = data.staff.role === 'dealer' ? '/portal' : '/dashboard'
+    navigate(dest, { replace: true })
+  }
+
   const onSubmit = async (values: FormValues) => {
     setServerError(null)
     try {
@@ -52,9 +53,7 @@ export default function LoginPage() {
         app_version: '1.0.0',
         os_version: navigator.userAgent,
       })
-      loginAction(data.token, data.expires_in, data.staff, data.ref_block, getDeviceId())
-      const dest = data.staff.role === 'dealer' ? '/dealer/requests' : '/dashboard'
-      navigate(dest, { replace: true })
+      handleAuthSuccess(data)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed. Please try again.'
       setServerError(msg)
@@ -184,9 +183,9 @@ export default function LoginPage() {
                 />
                 <span className="text-sm text-slate-600 dark:text-slate-400">Remember me</span>
               </label>
-              <button type="button" className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-medium">
+              <Link to="/forgot-password" className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-medium">
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             <button
@@ -205,6 +204,16 @@ export default function LoginPage() {
               ) : 'Sign in'}
             </button>
           </form>
+
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+            <span className="text-xs text-slate-400">or</span>
+            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
+          </div>
+
+          <div className="flex justify-center">
+            <GoogleSignInButton onSuccess={handleAuthSuccess} onError={setServerError} />
+          </div>
 
           <p className="mt-8 text-center text-xs text-slate-400">
             Device ID registered for secure session management
