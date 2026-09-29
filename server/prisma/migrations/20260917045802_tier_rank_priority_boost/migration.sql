@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE `tiers` ADD COLUMN `priorityBoost` INTEGER NOT NULL DEFAULT 0,
+    ADD COLUMN `rank` INTEGER NOT NULL DEFAULT 0;
