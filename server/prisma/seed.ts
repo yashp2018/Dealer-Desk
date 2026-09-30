@@ -9,6 +9,18 @@ import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
+// This seeds a well-known dev admin password (ChangeMe123!) and prints it to
+// the console — never something to run against a real database by accident
+// (a misconfigured CI/deploy step pointing at the production DATABASE_URL,
+// for instance). Require an explicit opt-in to proceed in production at all.
+if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW_PRODUCTION !== 'true') {
+  console.error(
+    'Refusing to run: NODE_ENV=production. This script seeds a well-known dev admin password.\n' +
+      'Set SEED_ALLOW_PRODUCTION=true only if you are certain that is intended.',
+  )
+  process.exit(1)
+}
+
 const PERMISSIONS = [
   'dealers.view_own', 'dealers.view_all', 'dealers.create', 'dealers.edit', 'dealers.delete',
   'prospects.view_own', 'prospects.view_all', 'prospects.create', 'prospects.edit', 'prospects.convert',
