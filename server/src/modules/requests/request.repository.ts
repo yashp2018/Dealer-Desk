@@ -10,9 +10,9 @@ export const requestRepository = {
     q?: string
     status?: string
     priority?: number
-    dealerId?: number
-    ownerStaffId?: number
-    typeId?: number
+    dealerId?: string
+    ownerStaffId?: string
+    typeId?: string
     startDate?: string
     endDate?: string
   }) {
@@ -39,7 +39,7 @@ export const requestRepository = {
     return { requests, total }
   },
 
-  findById(id: number) {
+  findById(id: string) {
     return prisma.request.findUnique({ where: { id }, include: includeRelations })
   },
 
@@ -47,11 +47,11 @@ export const requestRepository = {
     return prisma.request.findUnique({ where: { clientUuid }, include: includeRelations })
   },
 
-  fields(requestId: number) {
+  fields(requestId: string) {
     return prisma.requestFieldValue.findMany({ where: { requestId }, orderBy: [{ groupIndex: 'asc' }, { id: 'asc' }] })
   },
 
-  async upsertFields(requestId: number, fields: Record<string, string>, groupIndex = 0) {
+  async upsertFields(requestId: string, fields: Record<string, string>, groupIndex = 0) {
     await Promise.all(
       Object.entries(fields).map(([key, value]) =>
         prisma.requestFieldValue.upsert({
@@ -63,11 +63,11 @@ export const requestRepository = {
     )
   },
 
-  lines(requestId: number) {
+  lines(requestId: string) {
     return prisma.requestLine.findMany({ where: { requestId } })
   },
 
-  timeline(requestId: number) {
+  timeline(requestId: string) {
     return prisma.timelineEntry.findMany({
       where: { entityType: 'request', entityId: requestId },
       include: { actor: true },
@@ -75,7 +75,7 @@ export const requestRepository = {
     })
   },
 
-  escalations(requestId: number) {
+  escalations(requestId: string) {
     return prisma.escalationLog.findMany({
       where: { requestId },
       include: { rule: { select: { name: true } } },
@@ -83,7 +83,7 @@ export const requestRepository = {
     })
   },
 
-  delete(id: number) {
+  delete(id: string) {
     return prisma.request.delete({ where: { id } })
   },
 }

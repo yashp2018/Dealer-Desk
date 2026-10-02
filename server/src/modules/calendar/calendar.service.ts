@@ -12,7 +12,7 @@ import { CreateCalendarActivityInput, UpdateCalendarActivityInput } from './cale
  * directly instead of an Express Request, since the service layer shouldn't
  * depend on the HTTP layer's shape.
  */
-function canTouch(actor: AuthenticatedStaff, ownerStaffId: number): boolean {
+function canTouch(actor: AuthenticatedStaff, ownerStaffId: string): boolean {
   if (actor.permissions.includes('*') || actor.permissions.includes('calendar.view_all')) return true
   return actor.permissions.includes('calendar.view_own') && ownerStaffId === actor.id
 }
@@ -23,7 +23,7 @@ function assertEndAfterStart(start: Date, end: Date) {
   }
 }
 
-async function assertDealerExists(dealerId: number) {
+async function assertDealerExists(dealerId: string) {
   const dealer = await prisma.dealer.findUnique({ where: { id: dealerId } })
   if (!dealer) throw new BadRequestError('Unknown dealer')
 }
@@ -38,14 +38,14 @@ export const calendarService = {
     return activities.map(toCalendarActivityDto)
   },
 
-  async getOrThrow(id: number) {
+  async getOrThrow(id: string) {
     const activity = await calendarRepository.findById(id)
     if (!activity) throw new NotFoundError('Calendar activity')
     return activity
   },
 
   /** Fetches the raw record and enforces the caller can actually see it — used internally by mutations that need the pre-update values. */
-  async getForActor(id: number, actor: AuthenticatedStaff) {
+  async getForActor(id: string, actor: AuthenticatedStaff) {
     const activity = await this.getOrThrow(id)
     if (!canTouch(actor, activity.ownerStaffId)) {
       throw new ForbiddenError('You do not have access to this calendar activity')
@@ -53,7 +53,7 @@ export const calendarService = {
     return activity
   },
 
-  async getOne(id: number, actor: AuthenticatedStaff) {
+  async getOne(id: string, actor: AuthenticatedStaff) {
     const activity = await this.getForActor(id, actor)
     return toCalendarActivityDto(activity)
   },
@@ -99,7 +99,7 @@ export const calendarService = {
     return toCalendarActivityDto(created)
   },
 
-  async update(id: number, patch: UpdateCalendarActivityInput, actor: AuthenticatedStaff) {
+  async update(id: string, patch: UpdateCalendarActivityInput, actor: AuthenticatedStaff) {
     const activity = await this.getForActor(id, actor)
 
     const nextStart = patch.start_at ? new Date(patch.start_at) : activity.startAt
@@ -136,7 +136,7 @@ export const calendarService = {
     return toCalendarActivityDto(updated)
   },
 
-  async move(id: number, startAt: string, endAt: string, actor: AuthenticatedStaff) {
+  async move(id: string, startAt: string, endAt: string, actor: AuthenticatedStaff) {
     const activity = await this.getForActor(id, actor)
     const nextStart = new Date(startAt)
     const nextEnd = new Date(endAt)
@@ -153,7 +153,7 @@ export const calendarService = {
     return toCalendarActivityDto(updated)
   },
 
-  async resize(id: number, endAt: string, actor: AuthenticatedStaff) {
+  async resize(id: string, endAt: string, actor: AuthenticatedStaff) {
     const activity = await this.getForActor(id, actor)
     const nextEnd = new Date(endAt)
     assertEndAfterStart(activity.startAt, nextEnd)
@@ -169,7 +169,7 @@ export const calendarService = {
     return toCalendarActivityDto(updated)
   },
 
-  async complete(id: number, actor: AuthenticatedStaff) {
+  async complete(id: string, actor: AuthenticatedStaff) {
     const activity = await this.getForActor(id, actor)
     if (activity.status === 'completed') return toCalendarActivityDto(activity)
 
@@ -184,7 +184,7 @@ export const calendarService = {
     return toCalendarActivityDto(updated)
   },
 
-  async remove(id: number, actor: AuthenticatedStaff) {
+  async remove(id: string, actor: AuthenticatedStaff) {
     await this.getForActor(id, actor)
     await calendarRepository.delete(id)
   },

@@ -98,8 +98,8 @@ export async function runEscalationCheck(): Promise<EscalationRunResult> {
 }
 
 async function applyAction(
-  rule: { id: number; name: string; actionType: string; actionTargetStaffId: number | null; actionTargetRole: string | null },
-  request: { id: number },
+  rule: { id: string; name: string; actionType: string; actionTargetStaffId: string | null; actionTargetRole: string | null },
+  request: { id: string },
   message: string,
 ): Promise<string> {
   if (rule.actionType === 'notify_owner') {
