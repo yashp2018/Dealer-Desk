@@ -38,7 +38,7 @@ export async function findServices(query: ServiceListQuery) {
   return { items, total, page, limit, totalPages: Math.ceil(total / limit) }
 }
 
-export function findServiceById(id: number) {
+export function findServiceById(id: string) {
   return prisma.service.findUnique({ where: { id }, include: includeProvider })
 }
 
@@ -54,15 +54,15 @@ export function createService(data: Prisma.ServiceCreateInput) {
   return prisma.service.create({ data, include: includeProvider })
 }
 
-export function updateService(id: number, data: Prisma.ServiceUpdateInput) {
+export function updateService(id: string, data: Prisma.ServiceUpdateInput) {
   return prisma.service.update({ where: { id }, data, include: includeProvider })
 }
 
-export function deleteService(id: number) {
+export function deleteService(id: string) {
   return prisma.service.delete({ where: { id } })
 }
 
-export function findServicesByProvider(providerId: number) {
+export function findServicesByProvider(providerId: string) {
   return prisma.service.findMany({
     where: { providerId },
     select: { id: true, serviceCode: true, name: true, slug: true, status: true, isFeatured: true },

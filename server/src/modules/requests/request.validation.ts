@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { objectIdString } from '../../common/validators/common'
 
 export const listRequestsQuery = z.object({
   page: z.coerce.number().int().positive().optional(),
@@ -6,9 +7,9 @@ export const listRequestsQuery = z.object({
   q: z.string().optional(),
   status: z.string().optional(),
   priority: z.coerce.number().int().min(1).max(4).optional(),
-  dealer_id: z.coerce.number().int().positive().optional(),
-  owner_staff_id: z.coerce.number().int().positive().optional(),
-  type_id: z.coerce.number().int().positive().optional(),
+  dealer_id: objectIdString.optional(),
+  owner_staff_id: objectIdString.optional(),
+  type_id: objectIdString.optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
 })
@@ -28,12 +29,12 @@ export const requestFieldGroupsSchema = z
   .optional()
 
 export const createRequestSchema = z.object({
-  dealer_id: z.coerce.number().int().positive(),
-  type_id: z.coerce.number().int().positive(),
+  dealer_id: objectIdString,
+  type_id: objectIdString,
   title: z.string().min(1).max(191).optional(),
   description: z.string().optional(),
   priority: z.number().int().min(1).max(4).optional(),
-  owner_staff_id: z.coerce.number().int().positive().optional(),
+  owner_staff_id: objectIdString.optional(),
   scheduled_at: z.string().optional(),
   fields: requestFieldGroupsSchema,
   lines: z.array(requestLineInputSchema).max(50).optional(),
@@ -50,7 +51,7 @@ export const createRequestSchema = z.object({
  * both in sync when either changes.
  */
 export const dealerCreateRequestSchema = z.object({
-  type_id: z.coerce.number().int().positive(),
+  type_id: objectIdString,
   title: z.string().min(1).max(191).optional(),
   description: z.string().optional(),
   scheduled_at: z.string().optional(),
@@ -66,7 +67,7 @@ export function toFieldGroups(fields: Record<string, string> | Record<string, st
 }
 
 export const setStatusSchema = z.object({ status: z.string().min(1) })
-export const assignSchema = z.object({ staff_id: z.coerce.number().int().positive() })
+export const assignSchema = z.object({ staff_id: objectIdString })
 export const prioritySchema = z.object({
   priority: z.number().int().min(1).max(4),
   reason: z.string().optional(),
@@ -75,7 +76,7 @@ export const rescheduleSchema = z.object({ due_at: z.string().min(1) })
 export const noteSchema = z.object({ body: z.string().min(1) })
 export const reviseSchema = z.object({ reason: z.string().min(1) })
 export const handlingSchema = z.object({
-  owner_staff_id: z.coerce.number().int().positive().optional(),
+  owner_staff_id: objectIdString.optional(),
   scheduled_at: z.string().optional(),
   priority: z.number().int().min(1).max(4).optional(),
 })

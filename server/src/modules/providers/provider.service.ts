@@ -2,13 +2,6 @@
  * modules/providers/provider.service.ts
  *
  * Business logic for the Providers module.
- *
- * Business rules:
- * - providerCode must be unique (case-insensitive, stored uppercase).
- * - slug is auto-derived from name if not provided, must be unique.
- * - Only admin/manager can change verificationStatus.
- * - serviceCount is maintained atomically via the repository.
- * - Deleting a provider is blocked if it has active services (admin can force).
  */
 
 import { Prisma } from '@prisma/client'
@@ -38,7 +31,7 @@ function toSlug(name: string): string {
     .replace(/-+/g, '-')
 }
 
-function toCreateData(dto: CreateProviderDto, providerCode: string, slug: string, createdBy?: number): Prisma.ProviderCreateInput {
+function toCreateData(dto: CreateProviderDto, providerCode: string, slug: string, createdBy?: string): Prisma.ProviderCreateInput {
   return {
     providerCode,
     name: dto.name,
@@ -102,13 +95,13 @@ export async function listProviders(query: ProviderListQuery) {
   }
 }
 
-export async function getProvider(id: number) {
+export async function getProvider(id: string) {
   const provider = await findProviderById(id)
   if (!provider) throw AppError.notFound('Provider not found.')
   return toProviderDto(provider)
 }
 
-export async function createNewProvider(dto: CreateProviderDto, createdBy?: number) {
+export async function createNewProvider(dto: CreateProviderDto, createdBy?: string) {
   const providerCode = dto.providerCode?.toUpperCase() ?? (await nextRefNo('PRV'))
 
   const [codeConflict, slugConflict] = await Promise.all([
@@ -125,16 +118,14 @@ export async function createNewProvider(dto: CreateProviderDto, createdBy?: numb
   return toProviderDto(created)
 }
 
-export async function updateExistingProvider(id: number, dto: UpdateProviderDto, role: string) {
+export async function updateExistingProvider(id: string, dto: UpdateProviderDto, role: string) {
   const existing = await findProviderById(id)
   if (!existing) throw AppError.notFound('Provider not found.')
 
-  // Business rule: only admin/manager can change verificationStatus
   if (dto.verificationStatus !== undefined && !['admin', 'manager'].includes(role)) {
     throw AppError.forbidden('Only managers and admins can change verification status.')
   }
 
-  // Slug uniqueness if changing
   let slug: string | undefined
   if (dto.slug && dto.slug !== existing.slug) {
     const conflict = await findProviderBySlug(dto.slug)
@@ -148,11 +139,10 @@ export async function updateExistingProvider(id: number, dto: UpdateProviderDto,
   return toProviderDto(updated)
 }
 
-export async function removeProvider(id: number, role: string) {
+export async function removeProvider(id: string, role: string) {
   const existing = await findProviderById(id)
   if (!existing) throw AppError.notFound('Provider not found.')
 
-  // Business rule: block deletion if provider has active services
   const services = await findServicesByProvider(id)
   const activeServices = services.filter((s) => s.status === 'active')
 
@@ -166,13 +156,13 @@ export async function removeProvider(id: number, role: string) {
   return { deleted: true }
 }
 
-export async function getProviderServices(providerId: number) {
+export async function getProviderServices(providerId: string) {
   const provider = await findProviderById(providerId)
   if (!provider) throw AppError.notFound('Provider not found.')
   return findServicesByProvider(providerId)
 }
 
-export async function adjustProviderServiceCount(providerId: number, delta: 1 | -1) {
+export async function adjustProviderServiceCount(providerId: string, delta: 1 | -1) {
   return incrementProviderServiceCount(providerId, delta)
 }
 

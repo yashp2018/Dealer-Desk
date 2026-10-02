@@ -9,10 +9,9 @@ import { prisma } from '../../config/database'
 import { ProviderListQuery } from './provider.types'
 
 export async function findProviders(query: ProviderListQuery) {
-  const { page = 1, limit = 20, search, category, status, verificationStatus, location } = query
+  const { page = 1, limit = 20, search, status, verificationStatus, location } = query
   const where: Prisma.ProviderWhereInput = {
     ...(search ? { OR: [{ name: { contains: search } }, { shortDescription: { contains: search } }] } : {}),
-    ...(category ? { categories: { array_contains: category } } : {}),
     ...(status ? { status } : {}),
     ...(verificationStatus ? { verificationStatus } : {}),
     ...(location ? { addressCity: { contains: location } } : {}),
@@ -27,7 +26,7 @@ export async function findProviders(query: ProviderListQuery) {
   return { items, total, page, limit, totalPages: Math.ceil(total / limit) }
 }
 
-export function findProviderById(id: number) {
+export function findProviderById(id: string) {
   return prisma.provider.findUnique({ where: { id } })
 }
 
@@ -43,15 +42,15 @@ export function createProvider(data: Prisma.ProviderCreateInput) {
   return prisma.provider.create({ data })
 }
 
-export function updateProvider(id: number, data: Prisma.ProviderUpdateInput) {
+export function updateProvider(id: string, data: Prisma.ProviderUpdateInput) {
   return prisma.provider.update({ where: { id }, data })
 }
 
-export function deleteProvider(id: number) {
+export function deleteProvider(id: string) {
   return prisma.provider.delete({ where: { id } })
 }
 
-export function incrementProviderServiceCount(providerId: number, delta: 1 | -1) {
+export function incrementProviderServiceCount(providerId: string, delta: 1 | -1) {
   return prisma.provider.update({ where: { id: providerId }, data: { serviceCount: { increment: delta } } })
 }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isoDateTime } from '../../common/validators/common'
+import { isoDateTime, objectIdString } from '../../common/validators/common'
 
 export const ACTIVITY_TYPES = [
   'task',
@@ -30,8 +30,8 @@ export const createCalendarActivitySchema = z
     end_at: isoDateTime,
     timezone: z.string().max(64).optional(),
     reminder_minutes: reminderMinutes.optional(),
-    dealer_id: z.number().int().positive().optional(),
-    owner_staff_id: z.number().int().positive().optional(),
+    dealer_id: objectIdString.optional(),
+    owner_staff_id: objectIdString.optional(),
     priority: z.number().int().min(1).max(4).optional(),
     client_uuid: z.string().uuid().optional(),
   })
@@ -47,8 +47,8 @@ export const updateCalendarActivitySchema = z.object({
   start_at: isoDateTime.optional(),
   end_at: isoDateTime.optional(),
   reminder_minutes: reminderMinutes.optional(),
-  dealer_id: z.number().int().positive().nullable().optional(),
-  owner_staff_id: z.number().int().positive().optional(),
+  dealer_id: objectIdString.nullable().optional(),
+  owner_staff_id: objectIdString.optional(),
   priority: z.number().int().min(1).max(4).optional(),
 })
 

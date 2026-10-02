@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { phoneString } from '../../common/validators/common'
+import { phoneString, objectIdString } from '../../common/validators/common'
 
 const contactSchema = z.object({
   phone: phoneString,
@@ -42,4 +42,4 @@ export const providerListQuery = z.object({
   verificationStatus: z.enum(['pending', 'verified', 'rejected', 'inactive']).optional(),
 })
 
-export const providerIdParam = z.object({ id: z.coerce.number().int().positive() })
+export const providerIdParam = z.object({ id: objectIdString })

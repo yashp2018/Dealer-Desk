@@ -103,7 +103,7 @@ export function toDealerTimelineEntries(entries: TimelineEntry[]) {
     }))
 }
 
-export function toRequestDetailsDto(requestId: number, fields: RequestFieldValue[]) {
+export function toRequestDetailsDto(requestId: string, fields: RequestFieldValue[]) {
   const groups: Record<string, string>[] = []
   for (const f of fields) {
     groups[f.groupIndex] = { ...(groups[f.groupIndex] ?? {}), [f.key]: f.value }

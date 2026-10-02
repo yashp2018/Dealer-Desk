@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { objectIdString } from '../../common/validators/common'
 
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be a 24-hour HH:MM time').optional()
@@ -39,11 +40,11 @@ export const createServiceSchema = z.object({
   name: z.string().trim().min(1, 'Name is required.').max(191),
   serviceCode: z.string().trim().max(191).regex(/^[a-zA-Z0-9]+$/, 'Service code must be alphanumeric.').optional(),
   slug: z.string().trim().max(191).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only.').optional(),
-  categoryId: z.coerce.number().int().positive().optional(),
+  categoryId: objectIdString.optional(),
   shortDescription: z.string().max(191).optional(),
   description: z.string().optional(),
   images: z.array(z.string()).optional(),
-  providerId: z.coerce.number().int().positive().optional(),
+  providerId: objectIdString.optional(),
   serviceType: z.string().optional(),
   pricing: pricingSchema.optional(),
   duration: durationSchema.optional(),
@@ -63,10 +64,10 @@ export const serviceListQuery = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().optional(),
-  category: z.coerce.number().int().positive().optional(),
-  provider: z.coerce.number().int().positive().optional(),
+  category: objectIdString.optional(),
+  provider: objectIdString.optional(),
   location: z.string().optional(),
   status: z.enum(['draft', 'active', 'inactive', 'archived']).optional(),
 })
 
-export const serviceIdParam = z.object({ id: z.coerce.number().int().positive() })
+export const serviceIdParam = z.object({ id: objectIdString })

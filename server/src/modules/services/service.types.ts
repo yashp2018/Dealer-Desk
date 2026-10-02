@@ -35,11 +35,11 @@ export interface CreateServiceDto {
   serviceCode?: string
   name: string
   slug?: string
-  categoryId?: number
+  categoryId?: string
   shortDescription?: string
   description?: string
   images?: string[]
-  providerId?: number
+  providerId?: string
   serviceType?: string
   pricing?: ServicePricing
   duration?: ServiceDuration
@@ -59,8 +59,8 @@ export interface ServiceListQuery {
   page?: number
   limit?: number
   search?: string
-  category?: number
-  provider?: number
+  category?: string
+  provider?: string
   location?: string
   status?: string
 }

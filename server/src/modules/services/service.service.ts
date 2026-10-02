@@ -2,14 +2,6 @@
  * modules/services/service.service.ts
  *
  * Business logic for the Services module.
- *
- * Business rules:
- * - serviceCode must be unique (case-insensitive, stored uppercase).
- * - slug is auto-derived from name if not provided, must be unique.
- * - A service can only be set to 'active' if it has a provider assigned.
- * - Archived services cannot be updated (only admins can un-archive).
- * - isFeatured can only be set by admin/manager roles.
- * - Deleting a service is a soft-archive, not a hard delete (unless admin).
  */
 
 import { Prisma } from '@prisma/client'
@@ -30,7 +22,7 @@ import {
 import { toServiceDto } from './service.mapper'
 import { CreateServiceDto, UpdateServiceDto, ServiceListQuery } from './service.types'
 
-async function assertCategoryExists(categoryId: number) {
+async function assertCategoryExists(categoryId: string) {
   const category = await prisma.serviceCategory.findUnique({ where: { id: categoryId } })
   if (!category) throw AppError.badRequest('Unknown service category.')
 }
@@ -44,7 +36,7 @@ function toSlug(name: string): string {
     .replace(/-+/g, '-')
 }
 
-function toCreateData(dto: CreateServiceDto, serviceCode: string, slug: string, createdBy?: number): Prisma.ServiceCreateInput {
+function toCreateData(dto: CreateServiceDto, serviceCode: string, slug: string, createdBy?: string): Prisma.ServiceCreateInput {
   return {
     serviceCode,
     name: dto.name,
@@ -138,13 +130,13 @@ export async function listServices(query: ServiceListQuery) {
   }
 }
 
-export async function getService(id: number) {
+export async function getService(id: string) {
   const service = await findServiceById(id)
   if (!service) throw AppError.notFound('Service not found.')
   return toServiceDto(service)
 }
 
-export async function createNewService(dto: CreateServiceDto, createdBy?: number) {
+export async function createNewService(dto: CreateServiceDto, createdBy?: string) {
   const serviceCode = dto.serviceCode?.toUpperCase() ?? (await nextRefNo('SVC'))
 
   const [codeConflict, slugConflict] = await Promise.all([
@@ -157,7 +149,6 @@ export async function createNewService(dto: CreateServiceDto, createdBy?: number
   const slug = dto.slug ?? toSlug(dto.name)
   if (slugConflict) throw AppError.conflict(`Slug '${slug}' is already in use.`)
 
-  // Business rule: active status requires a provider
   if (dto.status === 'active' && !dto.providerId) {
     throw AppError.badRequest('A service cannot be set to active without an assigned provider.')
   }
@@ -168,28 +159,24 @@ export async function createNewService(dto: CreateServiceDto, createdBy?: number
   return toServiceDto(created)
 }
 
-export async function updateExistingService(id: number, dto: UpdateServiceDto, role: string) {
+export async function updateExistingService(id: string, dto: UpdateServiceDto, role: string) {
   const existing = await findServiceById(id)
   if (!existing) throw AppError.notFound('Service not found.')
 
-  // Business rule: archived services are locked
   if (existing.status === 'archived' && role !== 'admin') {
     throw AppError.forbidden('Archived services cannot be modified. Contact an admin.')
   }
 
-  // Business rule: active requires provider
   const newStatus = dto.status ?? existing.status
   const newProvider = dto.providerId ?? existing.providerId ?? undefined
   if (newStatus === 'active' && !newProvider) {
     throw AppError.badRequest('A service cannot be set to active without an assigned provider.')
   }
 
-  // Business rule: only admin/manager can set isFeatured
   if (dto.isFeatured !== undefined && !['admin', 'manager'].includes(role)) {
     throw AppError.forbidden('Only managers and admins can feature a service.')
   }
 
-  // Slug uniqueness if changing
   let slug: string | undefined
   if (dto.slug && dto.slug !== existing.slug) {
     const conflict = await findServiceBySlug(dto.slug)
@@ -205,22 +192,20 @@ export async function updateExistingService(id: number, dto: UpdateServiceDto, r
   return toServiceDto(updated)
 }
 
-export async function archiveService(id: number, role: string) {
+export async function archiveService(id: string, role: string) {
   const existing = await findServiceById(id)
   if (!existing) throw AppError.notFound('Service not found.')
 
   if (role === 'admin') {
-    // Hard delete for admins
     await repoDelete(id)
     return { deleted: true }
   }
 
-  // Soft archive for non-admins
   const updated = await repoUpdate(id, { status: 'archived' })
   return toServiceDto(updated)
 }
 
-export async function getServicesByProvider(providerId: number) {
+export async function getServicesByProvider(providerId: string) {
   return findServicesByProvider(providerId)
 }
 

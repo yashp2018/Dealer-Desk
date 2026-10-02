@@ -4,10 +4,7 @@ import { prisma } from '../../config/database'
 const includeRelations = { dealer: true, owner: true } satisfies Prisma.CalendarActivityInclude
 
 export const calendarRepository = {
-  // Overlap query: any activity that intersects [startDate, endDate) at all,
-  // not just ones whose start falls inside the range — matches the same
-  // semantics visits/requests use for their own scheduled_at range filters.
-  findMany(params: { startDate: string; endDate: string; ownerStaffId?: number }) {
+  findMany(params: { startDate: string; endDate: string; ownerStaffId?: string }) {
     const where: Prisma.CalendarActivityWhereInput = {
       startAt: { lt: new Date(params.endDate) },
       endAt: { gt: new Date(params.startDate) },
@@ -16,7 +13,7 @@ export const calendarRepository = {
     return prisma.calendarActivity.findMany({ where, include: includeRelations, orderBy: { startAt: 'asc' } })
   },
 
-  findById(id: number) {
+  findById(id: string) {
     return prisma.calendarActivity.findUnique({ where: { id }, include: includeRelations })
   },
 
@@ -28,11 +25,11 @@ export const calendarRepository = {
     return prisma.calendarActivity.create({ data, include: includeRelations })
   },
 
-  update(id: number, data: Prisma.CalendarActivityUncheckedUpdateInput) {
+  update(id: string, data: Prisma.CalendarActivityUncheckedUpdateInput) {
     return prisma.calendarActivity.update({ where: { id }, data, include: includeRelations })
   },
 
-  delete(id: number) {
+  delete(id: string) {
     return prisma.calendarActivity.delete({ where: { id } })
   },
 }

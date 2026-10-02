@@ -37,7 +37,6 @@ export interface ProviderListQuery {
   page?: number
   limit?: number
   search?: string
-  category?: string
   location?: string
   status?: string
   verificationStatus?: string
