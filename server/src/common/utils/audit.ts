@@ -7,7 +7,7 @@ export async function writeAuditLog(
   params: {
     action: string
     entityType: string
-    entityId?: number
+    entityId?: string
     before?: unknown
     after?: unknown
   },

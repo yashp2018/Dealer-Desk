@@ -4,7 +4,7 @@ import { UnauthorizedError } from '../errors/AppError'
 import { prisma } from '../../config/database'
 
 export interface AuthenticatedStaff {
-  id: number
+  id: string
   name: string
   email: string
   role: string
@@ -42,7 +42,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
       throw new UnauthorizedError('Staff access only')
     }
 
-    const staffId = Number(payload.sub)
+    const staffId = payload.sub
     const staff = await prisma.staff.findUnique({
       where: { id: staffId },
       select: { id: true, name: true, email: true, isActive: true },

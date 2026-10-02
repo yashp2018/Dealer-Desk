@@ -2,7 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence, type Variants } from 'framer-motion'
 import { 
   CheckCircle, XCircle, Info, AlertTriangle, X, 
-  ChevronRight, Sparkles, Bell, User, Settings, HelpCircle 
+  ChevronRight, HelpCircle 
 } from 'lucide-react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
@@ -104,7 +104,7 @@ export default function AppLayout() {
   const isDashboardPage = pathname === '/dashboard'
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/80 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="app-shell flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-50/80 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 relative">
       
       {/* Ambient background glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -115,6 +115,7 @@ export default function AppLayout() {
 
       <Sidebar />
       
+      {/* On lg+ sidebar is sticky in-flow; on mobile it's fixed/overlaid so content takes full width */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
         <Topbar title={title} />
         
@@ -126,7 +127,7 @@ export default function AppLayout() {
         `}>
           {/* Subtle content overlay pattern */}
           {!isCalendarPage && !isDashboardPage && (
-            <div className="absolute inset-0 pointer-events-none opacity-[0.015]">
+            <div className="fixed inset-0 pointer-events-none opacity-[0.015] -z-10">
               <div className="h-full w-full" style={{ 
                 backgroundImage: bgPatterns.dots,
                 backgroundSize: '24px 24px'

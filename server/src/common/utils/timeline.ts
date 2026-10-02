@@ -8,10 +8,10 @@ export type TimelineEntityType = 'dealer' | 'prospect' | 'request' | 'visit' | '
 export async function recordTimelineEvent(
   params: {
     entityType: TimelineEntityType
-    entityId: number
+    entityId: string
     eventType: string
     summary: string
-    actorStaffId: number | null
+    actorStaffId: string | null
   },
   tx?: TxClient,
 ): Promise<void> {

@@ -233,7 +233,7 @@ export interface CreateProspectPayload {
   whatsapp?: string
   city?: string
   state_normalized?: string
-  owner_staff_id: number
+  owner_staff_id: string
   source?: string
 }
 
@@ -367,7 +367,7 @@ export interface DealerProfileUpdatePayload {
 // ─── Visit ────────────────────────────────────────────────────────────────────
 
 export interface Visit {
-  id: number
+  id: string
   ref: string
   ref_no: string
   dealer_id: string | null
@@ -398,8 +398,8 @@ export interface VisitAgendaItem {
 }
 
 export interface VisitAttachment {
-  id: number
-  visit_id: number
+  id: string
+  visit_id: string
   file_name: string
   mime_type: string
   size_bytes: number
@@ -412,7 +412,7 @@ export interface VisitAttachment {
 // ─── Notification ─────────────────────────────────────────────────────────────
 
 export interface Notification {
-  id: number
+  id: string
   title: string
   body: string
   message: string

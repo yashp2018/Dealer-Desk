@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { phoneString } from '../../common/validators/common'
+import { phoneString, objectIdString } from '../../common/validators/common'
 
 export const PROSPECT_STAGES = [
   'new',
@@ -18,7 +18,7 @@ export const listProspectsQuery = z.object({
   limit: z.coerce.number().int().positive().max(200).optional(),
   q: z.string().optional(),
   stage: z.enum(PROSPECT_STAGES).optional(),
-  owner_staff_id: z.coerce.number().int().positive().optional(),
+  owner_staff_id: objectIdString.optional(),
 })
 
 export const createProspectSchema = z.object({
@@ -29,14 +29,14 @@ export const createProspectSchema = z.object({
   whatsapp: phoneString,
   city: z.string().max(191).optional(),
   state_normalized: z.string().max(191).optional(),
-  owner_staff_id: z.number().int().positive(),
+  owner_staff_id: objectIdString,
   source: z.string().max(191).optional(),
 })
 
 export const updateProspectSchema = createProspectSchema.partial()
 
 export const setStageSchema = z.object({ stage: z.enum(PROSPECT_STAGES) })
-export const convertSchema = z.object({ tier_id: z.number().int().positive().optional() })
+export const convertSchema = z.object({ tier_id: objectIdString.optional() })
 export const onboardingStatusSchema = z.object({ status: z.enum(['pending', 'received', 'verified', 'rejected']) })
 
 export type CreateProspectInput = z.infer<typeof createProspectSchema>

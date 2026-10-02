@@ -5,8 +5,12 @@ import { connectDatabase, disconnectDatabase } from './config/database'
 import { startEscalationJob, stopEscalationJob } from './jobs/escalationJob'
 
 async function main(): Promise<void> {
-  await connectDatabase()
-  logger.info('Database connection established')
+  try {
+    await connectDatabase()
+    logger.info('Database connection established')
+  } catch (err) {
+    logger.error({ err }, 'Failed to connect to MongoDB — server will start but all DB queries will fail. Check DATABASE_URL in .env')
+  }
 
   if (!isTest) startEscalationJob()
 

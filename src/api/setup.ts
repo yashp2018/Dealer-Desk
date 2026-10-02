@@ -1,7 +1,7 @@
 import apiClient from './client'
 
 export interface RequestTypeAdmin {
-  id: number
+  id: string
   name: string
   slug: string
   icon: string
@@ -31,11 +31,11 @@ export const getRequestTypes = (): Promise<RequestTypeAdmin[]> => apiClient.get(
 export const createRequestType = (data: RequestTypePayload): Promise<RequestTypeAdmin> =>
   apiClient.post('/setup/request-types', data)
 
-export const updateRequestType = (id: number, data: Partial<RequestTypePayload>): Promise<RequestTypeAdmin> =>
+export const updateRequestType = (id: string, data: Partial<RequestTypePayload>): Promise<RequestTypeAdmin> =>
   apiClient.patch(`/setup/request-types/${id}`, data)
 
 export interface TierAdmin {
-  id: number
+  id: string
   name: string
   rank: number
   priority_boost: number
@@ -55,11 +55,11 @@ export const getTiers = (): Promise<TierAdmin[]> => apiClient.get('/setup/tiers'
 
 export const createTier = (data: TierPayload): Promise<TierAdmin> => apiClient.post('/setup/tiers', data)
 
-export const updateTier = (id: number, data: Partial<TierPayload>): Promise<TierAdmin> =>
+export const updateTier = (id: string, data: Partial<TierPayload>): Promise<TierAdmin> =>
   apiClient.patch(`/setup/tiers/${id}`, data)
 
 export interface VisitTypeAdmin {
-  id: number
+  id: string
   name: string
 }
 
@@ -72,22 +72,22 @@ export const getVisitTypesAdmin = (): Promise<VisitTypeAdmin[]> => apiClient.get
 export const createVisitType = (data: VisitTypePayload): Promise<VisitTypeAdmin> =>
   apiClient.post('/setup/visit-types', data)
 
-export const updateVisitType = (id: number, data: Partial<VisitTypePayload>): Promise<VisitTypeAdmin> =>
+export const updateVisitType = (id: string, data: Partial<VisitTypePayload>): Promise<VisitTypeAdmin> =>
   apiClient.patch(`/setup/visit-types/${id}`, data)
 
-export const deleteVisitType = (id: number): Promise<void> => apiClient.delete(`/setup/visit-types/${id}`)
+export const deleteVisitType = (id: string): Promise<void> => apiClient.delete(`/setup/visit-types/${id}`)
 
 export type EscalationActionType = 'notify_owner' | 'notify_role' | 'reassign'
 
 export interface EscalationRuleAdmin {
-  id: number
+  id: string
   name: string
   is_active: boolean
   trigger_priority: number | null
-  trigger_request_type_id: number | null
+  trigger_request_type_id: string | null
   trigger_hours_overdue: number
   action_type: EscalationActionType
-  action_target_staff_id: number | null
+  action_target_staff_id: string | null
   action_target_role: string | null
   escalation_message: string
   created_at: string
@@ -98,10 +98,10 @@ export interface EscalationRulePayload {
   name: string
   is_active?: boolean
   trigger_priority?: number | null
-  trigger_request_type_id?: number | null
+  trigger_request_type_id?: string | null
   trigger_hours_overdue: number
   action_type: EscalationActionType
-  action_target_staff_id?: number | null
+  action_target_staff_id?: string | null
   action_target_role?: string | null
   escalation_message: string
 }
@@ -111,14 +111,14 @@ export const getEscalationRules = (): Promise<EscalationRuleAdmin[]> => apiClien
 export const createEscalationRule = (data: EscalationRulePayload): Promise<EscalationRuleAdmin> =>
   apiClient.post('/setup/escalation-rules', data)
 
-export const updateEscalationRule = (id: number, data: Partial<EscalationRulePayload>): Promise<EscalationRuleAdmin> =>
+export const updateEscalationRule = (id: string, data: Partial<EscalationRulePayload>): Promise<EscalationRuleAdmin> =>
   apiClient.patch(`/setup/escalation-rules/${id}`, data)
 
 export const runEscalationRulesNow = (): Promise<{ requests_checked: number; rules_fired: number }> =>
   apiClient.post('/setup/escalation-rules/run-now')
 
 export interface RoleAdmin {
-  id: number
+  id: string
   key: string
   name: string
 }
@@ -126,31 +126,31 @@ export interface RoleAdmin {
 export const getRoles = (): Promise<RoleAdmin[]> => apiClient.get('/setup/roles')
 
 export interface StaffAdmin {
-  id: number
+  id: string
   name: string
   email: string
   is_active: boolean
   created_at: string
-  roles: { id: number; key: string; name: string }[]
+  roles: { id: string; key: string; name: string }[]
 }
 
 export interface StaffCreatePayload {
   name: string
   email: string
   password: string
-  role_ids: number[]
+  role_ids: string[]
 }
 
 export interface StaffUpdatePayload {
   name?: string
   email?: string
   is_active?: boolean
-  role_ids?: number[]
+  role_ids?: string[]
 }
 
 export const getStaff = (): Promise<StaffAdmin[]> => apiClient.get('/setup/staff')
 
 export const createStaff = (data: StaffCreatePayload): Promise<StaffAdmin> => apiClient.post('/setup/staff', data)
 
-export const updateStaff = (id: number, data: StaffUpdatePayload): Promise<StaffAdmin> =>
+export const updateStaff = (id: string, data: StaffUpdatePayload): Promise<StaffAdmin> =>
   apiClient.patch(`/setup/staff/${id}`, data)

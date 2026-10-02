@@ -25,99 +25,127 @@ const internalNav = [
 ]
 
 export default function Sidebar() {
-  const { sidebarCollapsed, setSidebarCollapsed } = useUiStore()
+  const { sidebarCollapsed, setSidebarCollapsed, sidebarOpen, toggleSidebar } = useUiStore()
   const { data: notifs = [] } = useNotifications()
   const { isAdmin, isStaff } = useAuth()
   const unread = notifs.filter((n) => !n.is_read).length
 
-  // Dealer users should never reach this sidebar — they use PortalLayout (/portal).
-  // This sidebar is only for admin/staff.
   const nav = (isAdmin || isStaff) ? internalNav : []
 
   return (
-    <motion.aside
-      animate={{ width: sidebarCollapsed ? 56 : 220 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className="relative bg-slate-900 dark:bg-slate-950 text-white flex flex-col shrink-0 h-screen sticky top-0 overflow-hidden border-r border-slate-800"
-    >
-      {/* Logo */}
-      <div className="h-14 flex items-center px-3.5 border-b border-slate-800 shrink-0">
-        <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-          <Building2 className="h-3.5 w-3.5 text-white" />
-        </div>
-        <AnimatePresence>
-          {!sidebarCollapsed && (
-            <motion.span
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
-              className="ml-2.5 font-bold text-sm tracking-tight text-white whitespace-nowrap overflow-hidden"
-            >
-              Dealer Desk
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
+    <>
+      {/* Mobile overlay backdrop */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            key="sidebar-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={toggleSidebar}
+            className="fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-[2px] lg:hidden"
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Nav */}
-      <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin space-y-0.5 px-2">
-        {nav.map(({ to, icon: Icon, label, badge }) => {
-          const badgeCount = badge ? unread : 0
-          return (
-            <NavLink
-              key={to}
-              to={to}
-              title={sidebarCollapsed ? label : undefined}
-              className={({ isActive }) =>
-                `relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors group ${
-                  isActive
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`
-              }
-            >
-              <div className="relative shrink-0">
-                <Icon className="h-4 w-4" />
-                {badgeCount > 0 && sidebarCollapsed && (
-                  <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
-                    {badgeCount > 9 ? '9+' : badgeCount}
+      {/* Sidebar — always visible on lg+, slide-in drawer on mobile */}
+      <motion.aside
+        animate={{
+          width: sidebarCollapsed ? 56 : 220,
+          x: 0,
+        }}
+        initial={false}
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        className={`
+          bg-slate-900 dark:bg-slate-950 text-white flex flex-col shrink-0 h-screen
+          border-r border-slate-800 overflow-hidden z-40
+          fixed lg:sticky top-0
+          transition-transform duration-200 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        `}
+        style={{ width: sidebarCollapsed ? 56 : 220 }}
+      >
+        {/* Logo */}
+        <div className="h-14 flex items-center px-3.5 border-b border-slate-800 shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+            <Building2 className="h-3.5 w-3.5 text-white" />
+          </div>
+          <AnimatePresence>
+            {!sidebarCollapsed && (
+              <motion.span
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.15 }}
+                className="ml-2.5 font-bold text-sm tracking-tight text-white whitespace-nowrap overflow-hidden"
+              >
+                Dealer Desk
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 py-2 overflow-y-auto scrollbar-thin space-y-0.5 px-2">
+          {nav.map(({ to, icon: Icon, label, badge }) => {
+            const badgeCount = badge ? unread : 0
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                title={sidebarCollapsed ? label : undefined}
+                onClick={() => { if (sidebarOpen) toggleSidebar() }}
+                className={({ isActive }) =>
+                  `relative flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors group ${
+                    isActive
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  }`
+                }
+              >
+                <div className="relative shrink-0">
+                  <Icon className="h-4 w-4" />
+                  {badgeCount > 0 && sidebarCollapsed && (
+                    <span className="absolute -top-1 -right-1 h-3.5 w-3.5 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+                      {badgeCount > 9 ? '9+' : badgeCount}
+                    </span>
+                  )}
+                </div>
+                <AnimatePresence>
+                  {!sidebarCollapsed && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.1 }}
+                      className="flex-1 whitespace-nowrap overflow-hidden"
+                    >
+                      {label}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+                {!sidebarCollapsed && badgeCount > 0 && (
+                  <span className="ml-auto h-5 min-w-5 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
+                    {badgeCount > 99 ? '99+' : badgeCount}
                   </span>
                 )}
-              </div>
-              <AnimatePresence>
-                {!sidebarCollapsed && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.1 }}
-                    className="flex-1 whitespace-nowrap overflow-hidden"
-                  >
-                    {label}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-              {!sidebarCollapsed && badgeCount > 0 && (
-                <span className="ml-auto h-5 min-w-5 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                  {badgeCount > 99 ? '99+' : badgeCount}
-                </span>
-              )}
-            </NavLink>
-          )
-        })}
-      </nav>
+              </NavLink>
+            )
+          })}
+        </nav>
 
-      {/* Collapse toggle */}
-      <div className="p-2 border-t border-slate-800 shrink-0">
-        <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="w-full flex items-center justify-center h-8 rounded-lg text-slate-500 hover:bg-slate-800 hover:text-white transition-colors"
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
-      </div>
-    </motion.aside>
+        {/* Collapse toggle — desktop only */}
+        <div className="p-2 border-t border-slate-800 shrink-0 hidden lg:block">
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="w-full flex items-center justify-center h-8 rounded-lg text-slate-500 hover:bg-slate-800 hover:text-white transition-colors"
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+        </div>
+      </motion.aside>
+    </>
   )
 }

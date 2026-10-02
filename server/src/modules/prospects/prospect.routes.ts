@@ -18,7 +18,7 @@ import {
   updateProspectSchema,
 } from './prospect.validation'
 
-function assertOwnedAccess(req: Request, ownerStaffId: number | null) {
+function assertOwnedAccess(req: Request, ownerStaffId: string | null) {
   if (!canAccessOwned(req, 'prospects', ownerStaffId)) {
     throw new ForbiddenError('You do not have access to this prospect')
   }
@@ -34,7 +34,7 @@ const prospectController = {
         take: limit,
         q: q.q as string | undefined,
         stage: q.stage as string | undefined,
-        ownerStaffId: q.owner_staff_id ? Number(q.owner_staff_id) : undefined,
+        ownerStaffId: q.owner_staff_id as string | undefined,
       },
       req.staff!,
     )
@@ -42,7 +42,7 @@ const prospectController = {
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {
-    const prospect = await prospectService.getOrThrow(Number(req.params.id))
+    const prospect = await prospectService.getOrThrow(req.params.id)
     assertOwnedAccess(req, prospect.ownerStaffId)
     ok(res, toProspectDto(prospect))
   }),
@@ -52,37 +52,37 @@ const prospectController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await prospectService.update(Number(req.params.id), req.body, req.staff!))
+    ok(res, await prospectService.update(req.params.id, req.body, req.staff!))
   }),
 
   setStage: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await prospectService.setStage(Number(req.params.id), req.body.stage, req.staff!.id))
+    ok(res, await prospectService.setStage(req.params.id, req.body.stage, req.staff!.id))
   }),
 
   convert: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await prospectService.convert(Number(req.params.id), req.body.tier_id, req.staff!.id))
+    ok(res, await prospectService.convert(req.params.id, req.body.tier_id, req.staff!.id))
   }),
 
   checklist: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const prospect = await prospectService.getOrThrow(id)
     assertOwnedAccess(req, prospect.ownerStaffId)
     ok(res, await prospectService.checklist(id))
   }),
 
   setOnboardingItem: asyncHandler(async (req: Request, res: Response) => {
-    ok(res, await prospectService.setOnboardingItem(Number(req.params.id), Number(req.params.itemId), req.body.status, req.staff!.id))
+    ok(res, await prospectService.setOnboardingItem(req.params.id, req.params.itemId, req.body.status, req.staff!.id))
   }),
 
   visits: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const prospect = await prospectService.getOrThrow(id)
     assertOwnedAccess(req, prospect.ownerStaffId)
     ok(res, await prospectService.visits(id))
   }),
 
   requests: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const prospect = await prospectService.getOrThrow(id)
     assertOwnedAccess(req, prospect.ownerStaffId)
     ok(res, await prospectService.requests(id))

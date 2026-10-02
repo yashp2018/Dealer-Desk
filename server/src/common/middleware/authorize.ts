@@ -17,7 +17,7 @@ export function requirePermission(...anyOf: string[]) {
   }
 }
 
-export function canAccessOwned(req: Request, resourcePrefix: string, ownerStaffId: number | null): boolean {
+export function canAccessOwned(req: Request, resourcePrefix: string, ownerStaffId: string | null): boolean {
   if (!req.staff) return false
   const granted = req.staff.permissions
   if (granted.includes('*') || granted.includes(`${resourcePrefix}.view_all`)) return true

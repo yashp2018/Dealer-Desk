@@ -28,7 +28,7 @@ interface DeviceInfo {
 export interface AuthResult {
   token: string
   expires_in: number
-  staff: { id: number; name: string; email: string; role: string; dealerId?: number }
+  staff: { id: string; name: string; email: string; role: string; dealerId?: string }
   ref_block: string
   refreshToken: string
 }
@@ -196,7 +196,7 @@ export const authService = {
     await authRepository.revokeRefreshTokenByHash(hashRefreshToken(rawRefreshToken))
   },
 
-  async logoutAll(userId: number, role: string): Promise<void> {
+  async logoutAll(userId: string, role: string): Promise<void> {
     if (role === 'dealer') {
       await authRepository.revokeAllRefreshTokensForDealerUser(userId)
       return
@@ -204,7 +204,7 @@ export const authService = {
     await authRepository.revokeAllRefreshTokensForStaff(userId)
   },
 
-  async changePassword(userId: number, role: string, currentPassword: string, newPassword: string): Promise<void> {
+  async changePassword(userId: string, role: string, currentPassword: string, newPassword: string): Promise<void> {
     if (role === 'dealer') {
       const dealerUser = await prisma.dealerUser.findUnique({ where: { id: userId } })
       if (!dealerUser) throw new UnauthorizedError()

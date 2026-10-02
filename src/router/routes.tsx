@@ -100,8 +100,24 @@ function CalendarRoute() {
 /** Root redirect: dealer → /portal, others → /dashboard */
 function RootRedirect() {
   const staff = useAuthStore((s) => s.staff)
+  const isNarrow = useMediaQuery('(max-width: 767px)')
   if (staff?.role === 'dealer') return <Navigate to="/portal" replace />
+  if (isNarrow) return <Navigate to="/mobile" replace />
   return <Navigate to="/dashboard" replace />
+}
+
+/**
+ * Wraps all internal (AppLayout) routes. On a phone-width screen,
+ * if the user lands on a desktop route, redirect them to /mobile.
+ * This ensures the mobile shell is always used on small screens.
+ */
+function DesktopOnlyRoute() {
+  const isNarrow = useMediaQuery('(max-width: 767px)')
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (isNarrow) navigate('/mobile', { replace: true })
+  }, [isNarrow, navigate])
+  return <Outlet />
 }
 
 export const router = createBrowserRouter([
@@ -140,45 +156,51 @@ export const router = createBrowserRouter([
             element: <InternalRoute />,
             children: [
               {
-                element: <AppLayout />,
+                // DesktopOnlyRoute: auto-redirects to /mobile on phone-width screens
+                element: <DesktopOnlyRoute />,
                 children: [
-                  { path: '/', element: <RootRedirect /> },
-                  { path: '/dashboard', element: <DashboardPage /> },
-                  { path: '/control-room', element: <ControlRoomPage /> },
-                  { path: '/calendar', element: <CalendarRoute /> },
-                  { path: '/calendar/day', element: <CalendarRoute /> },
-                  { path: '/calendar/week', element: <CalendarRoute /> },
-                  { path: '/calendar/month', element: <CalendarRoute /> },
-                  { path: '/dealers', element: <DealersListPage /> },
-                  { path: '/dealers/new', element: <DealerFormPage /> },
-                  { path: '/dealers/:id', element: <DealerDetailPage /> },
-                  { path: '/prospects', element: <ProspectsListPage /> },
-                  { path: '/prospects/new', element: <ProspectFormPage /> },
-                  { path: '/prospects/:id', element: <ProspectDetailPage /> },
-                  { path: '/requests', element: <RequestsListPage /> },
-                  { path: '/requests/new', element: <RequestFormPage /> },
-                  { path: '/requests/:id', element: <RequestDetailPage /> },
-                  { path: '/visits', element: <VisitsCalendarPage /> },
-                  { path: '/visits/new', element: <VisitFormPage /> },
-                  { path: '/visits/:id', element: <VisitDetailPage /> },
-                  { path: '/visits/:id/outcome', element: <VisitCapturePage /> },
-                  { path: '/reports', element: <ReportsPage /> },
-                  { path: '/services', element: <ServicesListPage /> },
-                  { path: '/services/:id', element: <ServiceDetailPage /> },
-                  { path: '/providers', element: <ProvidersListPage /> },
-                  { path: '/providers/:id', element: <ProviderDetailPage /> },
-                  { path: '/notifications', element: <NotificationsPage /> },
-                  { path: '/setup', element: <SetupPage /> },
-                  // ── Desktop views ──
-                  { path: '/desktop/dealers', element: <DesktopDealersPage /> },
-                  { path: '/desktop/dealers/:id', element: <DesktopDealer360Page /> },
-                  { path: '/desktop/requests', element: <DesktopRequestsPage /> },
-                  { path: '/desktop/requests/new', element: <DesktopRequestNewPage /> },
-                  { path: '/desktop/requests/:id', element: <DesktopRequestDetailPage /> },
-                  { path: '/desktop/prospects', element: <DesktopProspectsPage /> },
-                  { path: '/desktop/prospects/:id', element: <DesktopProspectDetailPage /> },
-                  { path: '/desktop/visits/:id', element: <DesktopVisitDetailPage /> },
-                  { path: '/desktop/calendar', element: <DesktopCalendarBoardPage /> },
+                  {
+                    element: <AppLayout />,
+                    children: [
+                      { path: '/', element: <RootRedirect /> },
+                      { path: '/dashboard', element: <DashboardPage /> },
+                      { path: '/control-room', element: <ControlRoomPage /> },
+                      { path: '/calendar', element: <CalendarRoute /> },
+                      { path: '/calendar/day', element: <CalendarRoute /> },
+                      { path: '/calendar/week', element: <CalendarRoute /> },
+                      { path: '/calendar/month', element: <CalendarRoute /> },
+                      { path: '/dealers', element: <DealersListPage /> },
+                      { path: '/dealers/new', element: <DealerFormPage /> },
+                      { path: '/dealers/:id', element: <DealerDetailPage /> },
+                      { path: '/prospects', element: <ProspectsListPage /> },
+                      { path: '/prospects/new', element: <ProspectFormPage /> },
+                      { path: '/prospects/:id', element: <ProspectDetailPage /> },
+                      { path: '/requests', element: <RequestsListPage /> },
+                      { path: '/requests/new', element: <RequestFormPage /> },
+                      { path: '/requests/:id', element: <RequestDetailPage /> },
+                      { path: '/visits', element: <VisitsCalendarPage /> },
+                      { path: '/visits/new', element: <VisitFormPage /> },
+                      { path: '/visits/:id', element: <VisitDetailPage /> },
+                      { path: '/visits/:id/outcome', element: <VisitCapturePage /> },
+                      { path: '/reports', element: <ReportsPage /> },
+                      { path: '/services', element: <ServicesListPage /> },
+                      { path: '/services/:id', element: <ServiceDetailPage /> },
+                      { path: '/providers', element: <ProvidersListPage /> },
+                      { path: '/providers/:id', element: <ProviderDetailPage /> },
+                      { path: '/notifications', element: <NotificationsPage /> },
+                      { path: '/setup', element: <SetupPage /> },
+                      // ── Desktop views ──
+                      { path: '/desktop/dealers', element: <DesktopDealersPage /> },
+                      { path: '/desktop/dealers/:id', element: <DesktopDealer360Page /> },
+                      { path: '/desktop/requests', element: <DesktopRequestsPage /> },
+                      { path: '/desktop/requests/new', element: <DesktopRequestNewPage /> },
+                      { path: '/desktop/requests/:id', element: <DesktopRequestDetailPage /> },
+                      { path: '/desktop/prospects', element: <DesktopProspectsPage /> },
+                      { path: '/desktop/prospects/:id', element: <DesktopProspectDetailPage /> },
+                      { path: '/desktop/visits/:id', element: <DesktopVisitDetailPage /> },
+                      { path: '/desktop/calendar', element: <DesktopCalendarBoardPage /> },
+                    ],
+                  },
                 ],
               },
               {

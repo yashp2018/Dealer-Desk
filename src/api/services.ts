@@ -1,10 +1,3 @@
-/**
- * src/api/services.ts
- *
- * Frontend API client for the Services module.
- * Consumes the Express /api/v1/services endpoints.
- */
-
 import apiClient from './client'
 
 export interface ServicePricing {
@@ -23,17 +16,17 @@ export interface ServiceAvailability {
 }
 
 export interface ServiceItem {
-  id: number
+  id: string
   serviceCode: string
   name: string
   slug: string
-  categoryId?: number
-  category?: { id: number; name: string; slug: string }
+  categoryId?: string
+  category?: { id: string; name: string; slug: string }
   shortDescription?: string
   description?: string
   images?: string[]
-  providerId?: number
-  provider?: { id: number; name: string; logo?: string; verificationStatus?: string }
+  providerId?: string
+  provider?: { id: string; name: string; logo?: string; verificationStatus?: string }
   serviceType?: string
   pricing?: ServicePricing
   duration?: { value: number; unit: string }
@@ -53,17 +46,10 @@ export interface ServiceListParams {
   page?: number
   limit?: number
   search?: string
-  category?: number
+  category?: string
   provider?: string
   location?: string
   status?: string
-}
-
-export interface ServiceListMeta {
-  page: number
-  limit: number
-  total: number
-  totalPages: number
 }
 
 export type CreateServicePayload = Omit<ServiceItem, 'id' | 'createdAt' | 'updatedAt' | 'provider' | 'category'>
@@ -72,7 +58,7 @@ export async function getServices(params?: ServiceListParams): Promise<ServiceIt
   return apiClient.get('/services', { params })
 }
 
-export async function getService(id: number): Promise<ServiceItem> {
+export async function getService(id: string): Promise<ServiceItem> {
   return apiClient.get(`/services/${id}`)
 }
 
@@ -80,10 +66,10 @@ export async function createService(payload: CreateServicePayload): Promise<Serv
   return apiClient.post('/services', payload)
 }
 
-export async function updateService(id: number, payload: Partial<CreateServicePayload>): Promise<ServiceItem> {
+export async function updateService(id: string, payload: Partial<CreateServicePayload>): Promise<ServiceItem> {
   return apiClient.patch(`/services/${id}`, payload)
 }
 
-export async function deleteService(id: number): Promise<void> {
+export async function deleteService(id: string): Promise<void> {
   await apiClient.delete(`/services/${id}`)
 }

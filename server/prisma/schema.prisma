@@ -1,13 +1,18 @@
-// Dealer Desk — Prisma schema (MySQL)
-// Field names are snake_case via @map to match the existing frontend contract
-// (src/api/types.ts) exactly — no frontend changes required.
+// Dealer Desk — Prisma schema (MongoDB)
+// Converted from MySQL: every id is now a MongoDB ObjectId string instead of
+// an autoincrement integer. Foreign-key constraints, cascade deletes, and
+// unique constraints are enforced by Prisma's query engine rather than the
+// database itself (MongoDB has no native FKs) — see the migration plan for
+// what that changes in practice. Field names are still snake_case via @map,
+// but the frontend DOES need updating this time: every `id: number` becomes
+// `id: string` (see src/api/types.ts).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "mongodb"
   url      = env("DATABASE_URL")
 }
 
@@ -16,15 +21,15 @@ datasource db {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Staff {
-  id           Int      @id @default(autoincrement())
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
   name         String
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  isActive     Boolean  @default(true) @map("is_active")
-  failedLoginCount Int  @default(0) @map("failed_login_count")
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  isActive     Boolean   @default(true) @map("is_active")
+  failedLoginCount Int   @default(0) @map("failed_login_count")
   lockedUntil  DateTime? @map("locked_until")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   roles              StaffRole[]
   refreshTokens      RefreshToken[]
@@ -48,7 +53,7 @@ model Staff {
 }
 
 model Role {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   key         String   @unique
   name        String
   createdAt   DateTime @default(now()) @map("created_at")
@@ -60,7 +65,7 @@ model Role {
 }
 
 model Permission {
-  id    Int    @id @default(autoincrement())
+  id    String @id @default(auto()) @map("_id") @db.ObjectId
   key   String @unique // e.g. "dealers.view", "requests.assign"
   label String
 
@@ -70,31 +75,36 @@ model Permission {
 }
 
 model RolePermission {
-  roleId       Int @map("role_id")
-  permissionId Int @map("permission_id")
+  id           String @id @default(auto()) @map("_id") @db.ObjectId
+  roleId       String @map("role_id") @db.ObjectId
+  permissionId String @map("permission_id") @db.ObjectId
 
   role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  @@id([roleId, permissionId])
+  // MongoDB has no composite primary key — this replaces the old
+  // @@id([roleId, permissionId]); Prisma still generates the same
+  // `roleId_permissionId` compound-key accessor for `where` clauses.
+  @@unique([roleId, permissionId])
   @@map("role_permissions")
 }
 
 model StaffRole {
-  staffId Int @map("staff_id")
-  roleId  Int @map("role_id")
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  staffId String @map("staff_id") @db.ObjectId
+  roleId  String @map("role_id") @db.ObjectId
 
   staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
   role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  @@id([staffId, roleId])
+  @@unique([staffId, roleId])
   @@map("staff_roles")
 }
 
 model RefreshToken {
-  id           Int       @id @default(autoincrement())
-  staffId      Int?      @map("staff_id")
-  dealerUserId Int?      @map("dealer_user_id")
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  staffId      String?   @map("staff_id") @db.ObjectId
+  dealerUserId String?   @map("dealer_user_id") @db.ObjectId
   tokenHash    String    @unique @map("token_hash")
   deviceId     String    @map("device_id")
   platform     String
@@ -118,8 +128,8 @@ model RefreshToken {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Tier {
-  id           Int     @id @default(autoincrement())
-  name         String
+  id           String  @id @default(auto()) @map("_id") @db.ObjectId
+  name         String  @unique
   multiplier   Float // response time multiplier — lower means faster SLA
   priorityBoost Int    @default(0) // levels to reduce effective priority by for dealers in this tier
   rank         Int     @default(0) // display/precedence order in Setup — lower ranks first
@@ -131,8 +141,8 @@ model Tier {
 }
 
 model Territory {
-  id   Int    @id @default(autoincrement())
-  name String
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String @unique
 
   dealers Dealer[]
 
@@ -140,8 +150,8 @@ model Territory {
 }
 
 model VisitType {
-  id   Int    @id @default(autoincrement())
-  name String
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String @unique
 
   visits Visit[]
 
@@ -149,14 +159,14 @@ model VisitType {
 }
 
 model DocType {
-  id   Int    @id @default(autoincrement())
-  name String
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  name String @unique
 
   @@map("doc_types")
 }
 
 model RequestType {
-  id              Int      @id @default(autoincrement())
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
   name            String
   slug            String   @unique
   icon            String
@@ -175,8 +185,8 @@ model RequestType {
 }
 
 model RequestTypeField {
-  id            Int    @id @default(autoincrement())
-  requestTypeId Int    @map("request_type_id")
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
+  requestTypeId String @map("request_type_id") @db.ObjectId
   key           String
   label         String
   inputType     String @map("input_type") // text|number|textarea|select|date|toggle|photo|item_ref
@@ -195,7 +205,7 @@ model RequestTypeField {
 
 /// Configurable status labels, keyed per entity (request, visit, prospect).
 model StatusConfig {
-  id         Int    @id @default(autoincrement())
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
   entityType String @map("entity_type") // "request" | "visit" | "prospect"
   key        String
   label      String
@@ -207,7 +217,7 @@ model StatusConfig {
 
 /// Allowed status transitions per entity type: from -> [to, to, ...]
 model StatusTransition {
-  id         Int    @id @default(autoincrement())
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
   entityType String @map("entity_type")
   fromStatus String @map("from_status")
   toStatus   String @map("to_status")
@@ -217,7 +227,7 @@ model StatusTransition {
 }
 
 model AppConfig {
-  key   String @id
+  key   String @id @map("_id")
   value Json
 
   @@map("app_config")
@@ -225,7 +235,7 @@ model AppConfig {
 
 /// Atomic counters for human-readable reference numbers (REQ-000123 etc.)
 model Sequence {
-  name  String @id
+  name  String @id @map("_id")
   value Int    @default(0)
 
   @@map("sequences")
@@ -236,19 +246,19 @@ model Sequence {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Dealer {
-  id                 Int       @id @default(autoincrement())
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   code               String    @unique
   name               String
   displayName        String    @map("display_name")
-  tierId             Int       @map("tier_id")
-  territoryId        Int       @map("territory_id")
+  tierId             String    @map("tier_id") @db.ObjectId
+  territoryId        String    @map("territory_id") @db.ObjectId
   city               String    @default("")
   stateNormalized    String    @default("") @map("state_normalized")
   health             String    @default("good") // good|warning|critical
   healthScore        Int?      @map("health_score")
   phonePrimary       String    @default("") @map("phone_primary")
   whatsappPhone      String    @default("") @map("whatsapp_phone")
-  ownerStaffId       Int?      @map("owner_staff_id")
+  ownerStaffId       String?   @map("owner_staff_id") @db.ObjectId
   clientId           Int?      @map("client_id")
   territoryIsManual  Boolean   @default(false) @map("territory_is_manual")
   lastContactAt      DateTime? @map("last_contact_at")
@@ -279,15 +289,15 @@ model Dealer {
 /// used and linked to the Dealer it became, so it drops out of future
 /// pick-lists without losing the audit trail of where that dealer came from.
 model DealerImportCandidate {
-  id              Int       @id @default(autoincrement())
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
   name            String
   city            String?
   phonePrimary    String?   @map("phone_primary")
   stateNormalized String?   @map("state_normalized")
   sourceFileName  String?   @map("source_file_name")
   status          String    @default("pending") @map("status") // pending|used
-  usedDealerId    Int?      @map("used_dealer_id")
-  createdBy       Int?      @map("created_by")
+  usedDealerId    String?   @map("used_dealer_id") @db.ObjectId
+  createdBy       String?   @map("created_by") @db.ObjectId
   createdAt       DateTime  @default(now()) @map("created_at")
   usedAt          DateTime? @map("used_at")
 
@@ -299,14 +309,14 @@ model DealerImportCandidate {
 }
 
 model DealerContact {
-  id        Int     @id @default(autoincrement())
-  dealerId  Int     @map("dealer_id")
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  dealerId  String   @map("dealer_id") @db.ObjectId
   name      String
-  roleLabel String  @default("") @map("role_label")
-  phone     String  @default("")
-  email     String  @default("")
-  isPrimary Boolean @default(false) @map("is_primary")
-  isActive  Boolean @default(true) @map("is_active")
+  roleLabel String   @default("") @map("role_label")
+  phone     String   @default("")
+  email     String   @default("")
+  isPrimary Boolean  @default(false) @map("is_primary")
+  isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
 
   dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
@@ -320,7 +330,7 @@ model DealerContact {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Prospect {
-  id                Int       @id @default(autoincrement())
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
   refNo             String    @unique @map("ref_no")
   companyName       String    @map("company_name")
   contactName       String    @default("") @map("contact_name")
@@ -331,9 +341,9 @@ model Prospect {
   stateNormalized   String    @default("") @map("state_normalized")
   stage             String    @default("new")
   stageChangedAt    DateTime  @default(now()) @map("stage_changed_at")
-  ownerStaffId      Int       @map("owner_staff_id")
+  ownerStaffId      String    @map("owner_staff_id") @db.ObjectId
   source            String    @default("")
-  convertedDealerId Int?      @unique @map("converted_dealer_id")
+  convertedDealerId String?   @unique @map("converted_dealer_id") @db.ObjectId
   createdAt         DateTime  @default(now()) @map("created_at")
 
   owner          Staff      @relation("ProspectOwner", fields: [ownerStaffId], references: [id])
@@ -349,8 +359,8 @@ model Prospect {
 }
 
 model OnboardingItem {
-  id         Int     @id @default(autoincrement())
-  prospectId Int     @map("prospect_id")
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  prospectId String  @map("prospect_id") @db.ObjectId
   docName    String  @map("doc_name")
   isRequired Boolean @default(true) @map("is_required")
   status     String  @default("pending") // pending|received|verified|rejected
@@ -369,18 +379,18 @@ model OnboardingItem {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Request {
-  id                  Int       @id @default(autoincrement())
+  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
   refNo               String    @unique @map("ref_no")
   title               String
-  description         String?   @db.Text
-  typeId              Int       @map("type_id")
+  description         String?
+  typeId              String    @map("type_id") @db.ObjectId
   status              String    @default("new")
   priority            Int       @default(3)
   priorityOverride    Int?      @map("priority_override")
   priorityReason      String?   @map("priority_reason")
-  dealerId            Int?      @map("dealer_id")
-  prospectId          Int?      @map("prospect_id")
-  ownerStaffId        Int?      @map("owner_staff_id")
+  dealerId            String?   @map("dealer_id") @db.ObjectId
+  prospectId          String?   @map("prospect_id") @db.ObjectId
+  ownerStaffId        String?   @map("owner_staff_id") @db.ObjectId
   dueAt               DateTime? @map("due_at")
   scheduledAt         DateTime? @map("scheduled_at")
   completionRequired  Int       @default(0) @map("completion_required")
@@ -413,11 +423,11 @@ model Request {
 }
 
 model RequestFieldValue {
-  id         Int    @id @default(autoincrement())
-  requestId  Int    @map("request_id")
+  id         String @id @default(auto()) @map("_id") @db.ObjectId
+  requestId  String @map("request_id") @db.ObjectId
   groupIndex Int    @default(0) @map("group_index") // lets one request carry multiple repeated field groups (e.g. several vehicles on one warranty claim)
   key        String
-  value      String @db.Text
+  value      String
 
   request Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
@@ -426,8 +436,8 @@ model RequestFieldValue {
 }
 
 model RequestLine {
-  id          Int     @id @default(autoincrement())
-  requestId   Int     @map("request_id")
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  requestId   String  @map("request_id") @db.ObjectId
   description String
   qty         Float   @default(1)
   unitRate    Float?  @map("unit_rate")
@@ -444,21 +454,21 @@ model RequestLine {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Visit {
-  id           Int       @id @default(autoincrement())
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
   refNo        String    @unique @map("ref_no")
-  dealerId     Int?      @map("dealer_id")
-  prospectId   Int?      @map("prospect_id")
-  visitTypeId  Int       @map("visit_type_id")
+  dealerId     String?   @map("dealer_id") @db.ObjectId
+  prospectId   String?   @map("prospect_id") @db.ObjectId
+  visitTypeId  String    @map("visit_type_id") @db.ObjectId
   title        String    @default("")
   scheduledAt  DateTime  @map("scheduled_at")
   startAt      DateTime? @map("start_at")
   endAt        DateTime? @map("end_at")
   status       String    @default("scheduled") // scheduled|in_progress|done|cancelled
   outcome      String?
-  outcomeNote  String?   @map("outcome_note") @db.Text
+  outcomeNote  String?   @map("outcome_note")
   nextStep     String?   @map("next_step")
   nextAt       DateTime? @map("next_at")
-  ownerStaffId Int       @map("owner_staff_id")
+  ownerStaffId String    @map("owner_staff_id") @db.ObjectId
   agendaJson   Json?     @map("agenda_json")
   clientUuid   String?   @unique @map("client_uuid")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -479,13 +489,13 @@ model Visit {
 }
 
 model VisitAttachment {
-  id                Int      @id @default(autoincrement())
-  visitId           Int      @map("visit_id")
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  visitId           String   @map("visit_id") @db.ObjectId
   fileName          String   @map("file_name")
   storedName        String   @map("stored_name")
   mimeType          String   @map("mime_type")
   sizeBytes         Int      @map("size_bytes")
-  uploadedByStaffId Int      @map("uploaded_by_staff_id")
+  uploadedByStaffId String   @map("uploaded_by_staff_id") @db.ObjectId
   createdAt         DateTime @default(now()) @map("created_at")
 
   visit      Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
@@ -504,21 +514,21 @@ model VisitAttachment {
 // ─────────────────────────────────────────────────────────────────────────
 
 model CalendarActivity {
-  id              Int       @id @default(autoincrement())
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
   title           String
-  description     String?   @db.Text
+  description     String?
   type            String    // task|reminder|meeting|followup|callback|sales_activity|payment_followup|delivery|service_followup
   startAt         DateTime  @map("start_at")
   endAt           DateTime  @map("end_at")
   timezone        String    @default("Asia/Kolkata")
   reminderMinutes Int?      @map("reminder_minutes")
-  dealerId        Int?      @map("dealer_id")
-  ownerStaffId    Int       @map("owner_staff_id")
+  dealerId        String?   @map("dealer_id") @db.ObjectId
+  ownerStaffId    String    @map("owner_staff_id") @db.ObjectId
   priority        Int       @default(3)
   status          String    @default("scheduled") // scheduled|completed|cancelled
   completedAt     DateTime? @map("completed_at")
-  createdBy       Int       @map("created_by")
-  updatedBy       Int?      @map("updated_by")
+  createdBy       String    @map("created_by") @db.ObjectId
+  updatedBy       String?   @map("updated_by") @db.ObjectId
   clientUuid      String?   @unique @map("client_uuid")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -540,20 +550,20 @@ model CalendarActivity {
 // ─────────────────────────────────────────────────────────────────────────
 
 model EscalationRule {
-  id       Int     @id @default(autoincrement())
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
   name     String
   isActive Boolean @default(true) @map("is_active")
 
-  triggerPriority      Int? @map("trigger_priority") // null = any priority
-  triggerRequestTypeId Int? @map("trigger_request_type_id") // null = any type
-  triggerHoursOverdue  Int  @map("trigger_hours_overdue") // 0 = the moment it breaches SLA
+  triggerPriority      Int?    @map("trigger_priority") // null = any priority
+  triggerRequestTypeId String? @map("trigger_request_type_id") @db.ObjectId // null = any type
+  triggerHoursOverdue  Int     @map("trigger_hours_overdue") // 0 = the moment it breaches SLA
 
   actionType          String  @map("action_type") // notify_owner | notify_role | reassign
-  actionTargetStaffId Int?    @map("action_target_staff_id") // used by reassign
+  actionTargetStaffId String? @map("action_target_staff_id") @db.ObjectId // used by reassign
   actionTargetRole    String? @map("action_target_role") // used by notify_role (Role.key)
 
   /// Template placeholders: {ref_no} {dealer_name} {hours_overdue} {title}
-  escalationMessage String @db.Text @map("escalation_message")
+  escalationMessage String @map("escalation_message")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -567,10 +577,10 @@ model EscalationRule {
 }
 
 model EscalationLog {
-  id          Int      @id @default(autoincrement())
-  ruleId      Int      @map("rule_id")
-  requestId   Int      @map("request_id")
-  actionTaken String   @db.Text @map("action_taken")
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  ruleId      String   @map("rule_id") @db.ObjectId
+  requestId   String   @map("request_id") @db.ObjectId
+  actionTaken String   @map("action_taken")
   firedAt     DateTime @default(now()) @map("fired_at")
 
   rule    EscalationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
@@ -586,12 +596,15 @@ model EscalationLog {
 // ─────────────────────────────────────────────────────────────────────────
 
 model TimelineEntry {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
   entityType   String   @map("entity_type") // dealer|prospect|request|visit
-  entityId     Int      @map("entity_id")
+  // Loose polymorphic reference (not a Prisma @relation — entityType decides
+  // which collection entityId points into), so it's a plain String, not
+  // @db.ObjectId; it still holds the same ObjectId-shaped strings.
+  entityId     String   @map("entity_id")
   eventType    String   @map("event_type")
-  summary      String   @db.Text
-  actorStaffId Int?     @map("actor_staff_id")
+  summary      String
+  actorStaffId String?  @map("actor_staff_id") @db.ObjectId
   createdAt    DateTime @default(now()) @map("created_at")
 
   actor Staff? @relation(fields: [actorStaffId], references: [id])
@@ -601,14 +614,14 @@ model TimelineEntry {
 }
 
 model Notification {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   // Exactly one of staffId / dealerId is set, enforced in application code —
   // staff and dealer-portal notifications are otherwise unrelated audiences.
-  staffId   Int?     @map("staff_id")
-  dealerId  Int?     @map("dealer_id")
+  staffId   String?  @map("staff_id") @db.ObjectId
+  dealerId  String?  @map("dealer_id") @db.ObjectId
   title     String
-  body      String   @db.Text
-  message   String   @db.Text
+  body      String
+  message   String
   linkUrl   String?  @map("link_url")
   isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
@@ -622,11 +635,12 @@ model Notification {
 }
 
 model AuditLog {
-  id           Int      @id @default(autoincrement())
-  actorStaffId Int?     @map("actor_staff_id")
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  actorStaffId String?  @map("actor_staff_id") @db.ObjectId
   action       String
   entityType   String   @map("entity_type")
-  entityId     Int?     @map("entity_id")
+  // Loose polymorphic reference, same reasoning as TimelineEntry.entityId.
+  entityId     String?  @map("entity_id")
   beforeJson   Json?    @map("before_json")
   afterJson    Json?    @map("after_json")
   ip           String?
@@ -646,7 +660,7 @@ model AuditLog {
 /// account lives in until reset time (same "try dealer, then staff" lookup
 /// order as login) — see authService.requestPasswordReset/resetPassword.
 model PasswordResetOtp {
-  id         Int       @id @default(autoincrement())
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
   email      String
   otpHash    String    @map("otp_hash")
   attempts   Int       @default(0)
@@ -663,10 +677,10 @@ model PasswordResetOtp {
 // ─────────────────────────────────────────────────────────────────────────
 
 model DealerUser {
-  id               Int       @id @default(autoincrement())
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
   email            String    @unique
   passwordHash     String    @map("password_hash")
-  dealerId         Int       @map("dealer_id")
+  dealerId         String    @map("dealer_id") @db.ObjectId
   name             String
   isActive         Boolean   @default(true) @map("is_active")
   failedLoginCount Int       @default(0) @map("failed_login_count")
@@ -686,14 +700,14 @@ model DealerUser {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Provider {
-  id                 Int      @id @default(autoincrement())
+  id                 String   @id @default(auto()) @map("_id") @db.ObjectId
   providerCode       String   @unique @map("provider_code")
   name               String
   slug               String   @unique
   logo               String?
   coverImage         String?  @map("cover_image")
   shortDescription   String?  @map("short_description")
-  description        String?  @db.Text
+  description        String?
   contactPhone       String?  @map("contact_phone")
   contactEmail       String?  @map("contact_email")
   contactWebsite     String?  @map("contact_website")
@@ -708,7 +722,7 @@ model Provider {
   serviceCount       Int      @default(0) @map("service_count")
   rating             Float?
   reviewCount        Int      @default(0) @map("review_count")
-  createdBy          Int?     @map("created_by")
+  createdBy          String?  @map("created_by") @db.ObjectId
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
@@ -721,7 +735,7 @@ model Provider {
 }
 
 model ServiceCategory {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String   @unique
   slug        String   @unique
   description String?
@@ -734,15 +748,15 @@ model ServiceCategory {
 }
 
 model Service {
-  id                  Int      @id @default(autoincrement())
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
   serviceCode         String   @unique @map("service_code")
   name                String
   slug                String   @unique
-  categoryId          Int?     @map("category_id")
+  categoryId          String?  @map("category_id") @db.ObjectId
   shortDescription    String?  @map("short_description")
-  description         String?  @db.Text
+  description         String?
   images              Json     @default("[]")
-  providerId          Int?     @map("provider_id")
+  providerId          String?  @map("provider_id") @db.ObjectId
   serviceType         String?  @map("service_type")
   pricingType         String?  @map("pricing_type") // free|fixed|range|quote
   pricingAmount       Float?   @map("pricing_amount")
@@ -762,10 +776,10 @@ model Service {
   eligibility         Json     @default("[]")
   requiredDocuments   Json     @default("[]") @map("required_documents")
   features            Json     @default("[]")
-  termsAndConditions  String?  @map("terms_and_conditions") @db.Text
+  termsAndConditions  String?  @map("terms_and_conditions")
   status              String   @default("draft") // draft|active|inactive|archived
   isFeatured          Boolean  @default(false) @map("is_featured")
-  createdBy           Int?     @map("created_by")
+  createdBy           String?  @map("created_by") @db.ObjectId
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -781,13 +795,13 @@ model Service {
 
 /// Records every mutation UUID applied via /sync/batch so repeats are no-ops.
 model SyncMutation {
-  clientUuid String   @id @map("client_uuid")
-  staffId    Int      @map("staff_id")
+  clientUuid String   @id @map("_id")
+  staffId    String   @map("staff_id") @db.ObjectId
   opType     String   @map("op_type")
   entityType String   @map("entity_type")
-  entityId   Int?     @map("entity_id")
+  entityId   String?  @map("entity_id")
   status     String   @default("applied") // applied|failed
-  error      String?  @db.Text
+  error      String?
   appliedAt  DateTime @default(now()) @map("applied_at")
 
   @@map("sync_mutations")

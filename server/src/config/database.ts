@@ -8,13 +8,13 @@ let dbConnected = false
 export async function connectDatabase(): Promise<void> {
   await prisma.$connect()
   dbConnected = true
-  logger.info('MySQL connected (Prisma)')
+  logger.info('MongoDB connected (Prisma)')
 }
 
 export async function disconnectDatabase(): Promise<void> {
   await prisma.$disconnect()
   dbConnected = false
-  logger.info('MySQL disconnected gracefully')
+  logger.info('MongoDB disconnected gracefully')
 }
 
 export function getDbStatus(): 'up' | 'down' {

@@ -20,8 +20,8 @@ export const getRequestTimeline = (id: string): Promise<TimelineEntry[]> =>
   apiClient.get(`/requests/${id}/timeline`)
 
 export interface EscalationLogEntry {
-  id: number
-  rule_id: number
+  id: string
+  rule_id: string
   rule_name: string
   action_taken: string
   fired_at: string

@@ -1,23 +1,15 @@
 /**
  * DEVELOPMENT SEED ONLY.
- * Seeds roles/permissions, master data (tiers/territories/request types/etc.),
- * request status workflow, and a single development admin account.
- * Never run this against a production database with these credentials.
+ * Seeds roles/permissions, master data, request status workflow,
+ * and a single development admin account.
  */
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 
-// This seeds a well-known dev admin password (ChangeMe123!) and prints it to
-// the console — never something to run against a real database by accident
-// (a misconfigured CI/deploy step pointing at the production DATABASE_URL,
-// for instance). Require an explicit opt-in to proceed in production at all.
 if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW_PRODUCTION !== 'true') {
-  console.error(
-    'Refusing to run: NODE_ENV=production. This script seeds a well-known dev admin password.\n' +
-      'Set SEED_ALLOW_PRODUCTION=true only if you are certain that is intended.',
-  )
+  console.error('Refusing to run: NODE_ENV=production.')
   process.exit(1)
 }
 
@@ -34,8 +26,6 @@ const PERMISSIONS = [
 
 async function main() {
   console.log('Seeding development data...')
-
-  const tierIdByName = (name: string): number => ['Gold', 'Silver', 'Bronze'].indexOf(name) + 1
 
   // ── Permissions & roles ──────────────────────────────────────────────
   const permissionRecords = await Promise.all(
@@ -54,11 +44,6 @@ async function main() {
     (p) =>
       /view_own|create|edit$/.test(p.key) ||
       /^(services|providers)\.view_all$/.test(p.key) ||
-      // Calendar activities are personal (tasks/reminders/etc a staff member
-      // creates for themselves), unlike dealers/services/providers which are
-      // shared business records — so unlike those, regular staff can delete
-      // their own. The service layer's ownership check still stops them
-      // deleting anyone else's.
       p.key === 'calendar.delete',
   )
   await prisma.rolePermission.deleteMany({ where: { roleId: staffRole.id } })
@@ -66,7 +51,7 @@ async function main() {
     data: ownPermissions.map((p) => ({ roleId: staffRole.id, permissionId: p.id })),
   })
 
-  // ── Admin user (development only — change this password immediately) ─
+  // ── Admin user ───────────────────────────────────────────────────────
   const adminPasswordHash = await bcrypt.hash('ChangeMe123!', 12)
   const admin = await prisma.staff.upsert({
     where: { email: 'admin@dealer.com' },
@@ -99,29 +84,28 @@ async function main() {
   )
 
   // ── Master data ───────────────────────────────────────────────────────
-  const tiers = await Promise.all(
-    [
-      { name: 'Gold', multiplier: 0.8, priorityBoost: 1, rank: 1, color: '#f59e0b' },
-      { name: 'Silver', multiplier: 1.0, priorityBoost: 0, rank: 2, color: '#6b7280' },
-      { name: 'Bronze', multiplier: 1.2, priorityBoost: 0, rank: 3, color: '#92400e' },
-    ].map((t) => prisma.tier.upsert({ where: { id: tierIdByName(t.name) }, create: t, update: t })),
-  )
+  // Use name-based upserts — MongoDB has no auto-increment IDs
+  const [goldTier, silverTier, bronzeTier] = await Promise.all([
+    prisma.tier.upsert({ where: { name: 'Gold' } as never, create: { name: 'Gold', multiplier: 0.8, priorityBoost: 1, rank: 1, color: '#f59e0b' }, update: {} }),
+    prisma.tier.upsert({ where: { name: 'Silver' } as never, create: { name: 'Silver', multiplier: 1.0, priorityBoost: 0, rank: 2, color: '#6b7280' }, update: {} }),
+    prisma.tier.upsert({ where: { name: 'Bronze' } as never, create: { name: 'Bronze', multiplier: 1.2, priorityBoost: 0, rank: 3, color: '#92400e' }, update: {} }),
+  ])
+  const tiers = [goldTier, silverTier, bronzeTier]
 
+  const territoryNames = ['North', 'South', 'East', 'West']
   const territories = await Promise.all(
-    ['North', 'South', 'East', 'West'].map((name, i) =>
-      prisma.territory.upsert({ where: { id: i + 1 }, create: { name }, update: { name } }),
+    territoryNames.map((name) => prisma.territory.upsert({ where: { name } as never, create: { name }, update: {} })),
+  )
+
+  await Promise.all(
+    ['Sales Visit', 'Technical Support', 'Audit'].map((name) =>
+      prisma.visitType.upsert({ where: { name } as never, create: { name }, update: {} }),
     ),
   )
 
   await Promise.all(
-    ['Sales Visit', 'Technical Support', 'Audit'].map((name, i) =>
-      prisma.visitType.upsert({ where: { id: i + 1 }, create: { name }, update: { name } }),
-    ),
-  )
-
-  await Promise.all(
-    ['Dealer Agreement', 'Insurance Certificate', 'Business License'].map((name, i) =>
-      prisma.docType.upsert({ where: { id: i + 1 }, create: { name }, update: { name } }),
+    ['Dealer Agreement', 'Insurance Certificate', 'Business License'].map((name) =>
+      prisma.docType.upsert({ where: { name } as never, create: { name }, update: {} }),
     ),
   )
 
@@ -151,7 +135,7 @@ async function main() {
     update: {},
   })
 
-  const fieldSpecs: Array<[number, { key: string; label: string; inputType: string; options: string[]; isRequired: boolean; sortOrder: number }]> = [
+  const fieldSpecs: Array<[string, { key: string; label: string; inputType: string; options: string[]; isRequired: boolean; sortOrder: number }]> = [
     [warranty.id, { key: 'vin', label: 'VIN Number', inputType: 'text', options: [], isRequired: true, sortOrder: 1 }],
     [warranty.id, { key: 'mileage', label: 'Mileage', inputType: 'number', options: [], isRequired: true, sortOrder: 2 }],
     [warranty.id, { key: 'fault_desc', label: 'Fault Description', inputType: 'textarea', options: [], isRequired: true, sortOrder: 3 }],
@@ -172,12 +156,9 @@ async function main() {
 
   // ── Request status workflow ──────────────────────────────────────────
   const statuses: Array<[string, string, number]> = [
-    ['new', 'New', 1],
-    ['in_progress', 'In Progress', 2],
-    ['waiting_dealer', 'Waiting on Dealer', 3],
-    ['waiting_internal', 'Waiting Internal', 4],
-    ['done', 'Done', 5],
-    ['cancelled', 'Cancelled', 6],
+    ['new', 'New', 1], ['in_progress', 'In Progress', 2],
+    ['waiting_dealer', 'Waiting on Dealer', 3], ['waiting_internal', 'Waiting Internal', 4],
+    ['done', 'Done', 5], ['cancelled', 'Cancelled', 6],
   ]
   for (const [key, label, sortOrder] of statuses) {
     await prisma.statusConfig.upsert({
@@ -224,7 +205,7 @@ async function main() {
     dealers.push(dealer)
   }
 
-  // ── Dealer Portal login (development only) ─────────────────────────────
+  // ── Dealer Portal login ───────────────────────────────────────────────
   await prisma.dealerUser.upsert({
     where: { email: 'portal@autoprime.com' },
     create: {
@@ -263,7 +244,6 @@ async function main() {
     prospects.push(prospect)
   }
 
-  // ── Onboarding Items ──────────────────────────────────────────────────
   await prisma.onboardingItem.createMany({
     data: [
       { prospectId: prospects[0].id, docName: 'Dealer Agreement', isRequired: true, status: 'verified' },
@@ -285,15 +265,10 @@ async function main() {
   ]
   const requests = []
   for (const r of requestsData) {
-    const req = await prisma.request.upsert({
-      where: { refNo: r.refNo },
-      create: r,
-      update: {},
-    })
+    const req = await prisma.request.upsert({ where: { refNo: r.refNo }, create: r, update: {} })
     requests.push(req)
   }
 
-  // ── Request Field Values ───────────────────────────────────────────────
   await prisma.requestFieldValue.createMany({
     data: [
       { requestId: requests[0].id, key: 'vin', value: 'MBLHA51BXEM123456' },
@@ -309,7 +284,6 @@ async function main() {
     skipDuplicates: true,
   })
 
-  // ── Request Lines ─────────────────────────────────────────────────────
   await prisma.requestLine.createMany({
     data: [
       { requestId: requests[2].id, description: 'Brake Pad Set BP-4521-X', qty: 10, unitRate: 850, total: 8500 },
@@ -319,45 +293,34 @@ async function main() {
   })
 
   // ── Visits ────────────────────────────────────────────────────────────
+  const salesVisitType = await prisma.visitType.findFirst({ where: { name: 'Sales Visit' } })
+  const techVisitType = await prisma.visitType.findFirst({ where: { name: 'Technical Support' } })
+  const auditVisitType = await prisma.visitType.findFirst({ where: { name: 'Audit' } })
+
   const visitsData = [
-    { refNo: 'VIS-001', dealerId: dealers[0].id, visitTypeId: 1, title: 'Quarterly business review', scheduledAt: new Date('2025-09-05T10:00:00Z'), status: 'scheduled', ownerStaffId: admin.id },
-    { refNo: 'VIS-002', dealerId: dealers[1].id, visitTypeId: 2, title: 'Technical support — EV charging', scheduledAt: new Date('2025-09-06T14:00:00Z'), status: 'done', outcome: 'positive', outcomeNote: 'Resolved charging unit fault, dealer satisfied', nextStep: 'Follow up in 2 weeks', nextAt: new Date('2025-09-20T10:00:00Z'), ownerStaffId: staffMembers[0].id },
-    { refNo: 'VIS-003', dealerId: dealers[2].id, visitTypeId: 3, title: 'Annual compliance audit', scheduledAt: new Date('2025-09-08T09:00:00Z'), status: 'scheduled', ownerStaffId: staffMembers[1].id },
-    { refNo: 'VIS-004', dealerId: dealers[3].id, visitTypeId: 1, title: 'New product launch briefing', scheduledAt: new Date('2025-09-10T11:00:00Z'), status: 'in_progress', ownerStaffId: admin.id },
-    { refNo: 'VIS-005', prospectId: prospects[0].id, visitTypeId: 1, title: 'Prospect demo — Gamma Dealers', scheduledAt: new Date('2025-09-07T15:00:00Z'), status: 'scheduled', ownerStaffId: staffMembers[0].id },
+    { refNo: 'VIS-001', dealerId: dealers[0].id, visitTypeId: salesVisitType!.id, title: 'Quarterly business review', scheduledAt: new Date('2025-09-05T10:00:00Z'), status: 'scheduled', ownerStaffId: admin.id },
+    { refNo: 'VIS-002', dealerId: dealers[1].id, visitTypeId: techVisitType!.id, title: 'Technical support — EV charging', scheduledAt: new Date('2025-09-06T14:00:00Z'), status: 'done', outcome: 'positive', outcomeNote: 'Resolved charging unit fault', nextStep: 'Follow up in 2 weeks', nextAt: new Date('2025-09-20T10:00:00Z'), ownerStaffId: staffMembers[0].id },
+    { refNo: 'VIS-003', dealerId: dealers[2].id, visitTypeId: auditVisitType!.id, title: 'Annual compliance audit', scheduledAt: new Date('2025-09-08T09:00:00Z'), status: 'scheduled', ownerStaffId: staffMembers[1].id },
+    { refNo: 'VIS-004', dealerId: dealers[3].id, visitTypeId: salesVisitType!.id, title: 'New product launch briefing', scheduledAt: new Date('2025-09-10T11:00:00Z'), status: 'in_progress', ownerStaffId: admin.id },
+    { refNo: 'VIS-005', prospectId: prospects[0].id, visitTypeId: salesVisitType!.id, title: 'Prospect demo — Gamma Dealers', scheduledAt: new Date('2025-09-07T15:00:00Z'), status: 'scheduled', ownerStaffId: staffMembers[0].id },
   ]
   const visits = []
   for (const v of visitsData) {
-    const visit = await prisma.visit.upsert({
-      where: { refNo: v.refNo },
-      create: v,
-      update: {},
-    })
+    const visit = await prisma.visit.upsert({ where: { refNo: v.refNo }, create: v, update: {} })
     visits.push(visit)
   }
 
   // ── Timeline Entries ──────────────────────────────────────────────────
   await prisma.timelineEntry.createMany({
     data: [
-      // Requests
       { entityType: 'request', entityId: requests[0].id, eventType: 'created', summary: 'Request created', actorStaffId: admin.id },
       { entityType: 'request', entityId: requests[0].id, eventType: 'status_change', summary: 'Status changed to in_progress', actorStaffId: admin.id },
-      { entityType: 'request', entityId: requests[0].id, eventType: 'note', summary: 'Contacted dealer for VIN confirmation', actorStaffId: admin.id },
       { entityType: 'request', entityId: requests[1].id, eventType: 'created', summary: 'Request created', actorStaffId: staffMembers[0].id },
       { entityType: 'request', entityId: requests[2].id, eventType: 'created', summary: 'Request created', actorStaffId: staffMembers[1].id },
-      { entityType: 'request', entityId: requests[2].id, eventType: 'status_change', summary: 'Status changed to waiting_dealer', actorStaffId: staffMembers[1].id },
-      { entityType: 'request', entityId: requests[3].id, eventType: 'created', summary: 'Request created', actorStaffId: admin.id },
-      { entityType: 'request', entityId: requests[3].id, eventType: 'status_change', summary: 'Status changed to done', actorStaffId: admin.id },
-      // Visits
       { entityType: 'visit', entityId: visits[0].id, eventType: 'created', summary: 'Visit scheduled', actorStaffId: admin.id },
-      { entityType: 'visit', entityId: visits[1].id, eventType: 'created', summary: 'Visit scheduled', actorStaffId: staffMembers[0].id },
       { entityType: 'visit', entityId: visits[1].id, eventType: 'status_change', summary: 'Visit completed with positive outcome', actorStaffId: staffMembers[0].id },
-      // Dealers
       { entityType: 'dealer', entityId: dealers[0].id, eventType: 'note', summary: 'Dealer onboarded successfully', actorStaffId: admin.id },
-      { entityType: 'dealer', entityId: dealers[2].id, eventType: 'note', summary: 'Health score dropped — follow up required', actorStaffId: admin.id },
-      // Prospects
       { entityType: 'prospect', entityId: prospects[0].id, eventType: 'stage_change', summary: 'Stage changed to contacted', actorStaffId: admin.id },
-      { entityType: 'prospect', entityId: prospects[1].id, eventType: 'stage_change', summary: 'Stage changed to demo_done', actorStaffId: staffMembers[0].id },
     ],
     skipDuplicates: true,
   })
@@ -365,42 +328,32 @@ async function main() {
   // ── Notifications ─────────────────────────────────────────────────────
   await prisma.notification.createMany({
     data: [
-      { staffId: admin.id, title: 'New Request Assigned', body: 'REQ-001 has been assigned to you', message: 'REQ-001 — Warranty claim: engine fault has been assigned to you', linkUrl: '/requests/1', isRead: false },
-      { staffId: admin.id, title: 'Overdue Alert', body: 'REQ-003 is overdue', message: 'REQ-003 — Parts order: brake pads is past its due date', linkUrl: '/requests/3', isRead: false },
-      { staffId: admin.id, title: 'Visit Reminder', body: 'VIS-001 is scheduled for tomorrow', message: 'Your visit to AutoPrime Motors is scheduled for tomorrow at 10:00 AM', linkUrl: '/visits/1', isRead: true },
-      { staffId: staffMembers[0].id, title: 'New Request Assigned', body: 'REQ-002 has been assigned to you', message: 'REQ-002 — Scheduled service: 10k km has been assigned to you', linkUrl: '/requests/2', isRead: false },
-      { staffId: staffMembers[0].id, title: 'Prospect Follow-up', body: 'PRO-002 requires follow-up', message: 'Delta Motors prospect is in demo_done stage and awaiting follow-up', linkUrl: '/prospects/2', isRead: false },
-      { staffId: staffMembers[1].id, title: 'Request Waiting', body: 'REQ-003 is waiting on dealer', message: 'REQ-003 — Parts order is waiting for dealer confirmation', linkUrl: '/requests/3', isRead: false },
+      { staffId: admin.id, title: 'New Request Assigned', body: 'REQ-001 has been assigned to you', message: 'REQ-001 — Warranty claim assigned to you', linkUrl: '/requests', isRead: false },
+      { staffId: admin.id, title: 'Overdue Alert', body: 'REQ-003 is overdue', message: 'REQ-003 — Parts order is past its due date', linkUrl: '/requests', isRead: false },
+      { staffId: admin.id, title: 'Visit Reminder', body: 'VIS-001 is scheduled for tomorrow', message: 'Your visit to AutoPrime Motors is tomorrow at 10:00 AM', linkUrl: '/visits', isRead: true },
+      { staffId: staffMembers[0].id, title: 'New Request Assigned', body: 'REQ-002 has been assigned to you', message: 'REQ-002 — Scheduled service assigned to you', linkUrl: '/requests', isRead: false },
+      { staffId: staffMembers[1].id, title: 'Request Waiting', body: 'REQ-003 is waiting on dealer', message: 'REQ-003 — Parts order waiting for dealer confirmation', linkUrl: '/requests', isRead: false },
     ],
     skipDuplicates: true,
   })
 
-  // ── App Config ────────────────────────────────────────────────────────
+  // ── App Config & Sequences ────────────────────────────────────────────
   await prisma.appConfig.upsert({
     where: { key: 'general' },
     create: { key: 'general', value: { voice_max_seconds: 120, recent_dealers_count: 10, sync_batch_max: 50, ref_block_size: 20, sla_clock: 'business_hours' } },
     update: {},
   })
 
-  // ── Sequences ─────────────────────────────────────────────────────────
-  // Must cover every prefix nextRefNo() is actually called with, not just
-  // the ref_no format seeded rows happen to use above — a mismatch here
-  // (e.g. 'dlr' missing while 4 dealers are seeded as DLR-001..004) causes
-  // the first real prospect conversion to collide on the unique dealer code.
   for (const name of ['request', 'visit', 'prospect', 'dlr']) {
     await prisma.sequence.upsert({ where: { name }, create: { name, value: 10 }, update: {} })
   }
 
   console.log('Seed complete.')
-  console.log('Development admin login: admin@dealer.com / ChangeMe123!')
-  console.log('Development dealer portal login: portal@autoprime.com / ChangeMe123!')
+  console.log('Admin login:         admin@dealer.com / ChangeMe123!')
+  console.log('Field staff login:   sarah@dealer.com / ChangeMe123!')
+  console.log('Dealer portal login: portal@autoprime.com / ChangeMe123!')
 }
 
 main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+  .catch((e) => { console.error(e); process.exit(1) })
+  .finally(async () => { await prisma.$disconnect() })

@@ -26,8 +26,8 @@ const ALLOWED_TRANSITIONS: Record<string, string[]> = {
 
 export const prospectService = {
   async list(
-    params: { skip: number; take: number; q?: string; stage?: string; ownerStaffId?: number },
-    actor: { id: number; permissions: string[] },
+    params: { skip: number; take: number; q?: string; stage?: string; ownerStaffId?: string },
+    actor: { id: string; permissions: string[] },
   ) {
     const canViewAll = actor.permissions.includes('*') || actor.permissions.includes('prospects.view_all')
     // A view_own-only staff member can never widen their own results by
@@ -38,13 +38,13 @@ export const prospectService = {
     return { prospects: prospects.map(toProspectDto), total }
   },
 
-  async getOrThrow(id: number) {
+  async getOrThrow(id: string) {
     const prospect = await prospectRepository.findById(id)
     if (!prospect) throw new NotFoundError('Prospect')
     return prospect
   },
 
-  async create(input: CreateProspectInput, actor: { id: number; permissions: string[] }) {
+  async create(input: CreateProspectInput, actor: { id: string; permissions: string[] }) {
     const actorStaffId = actor.id
     // Unlike Requests, every prospect must have an owner (owner_staff_id is
     // required on the schema) — only requests.view_all-equivalent staff can
@@ -76,7 +76,7 @@ export const prospectService = {
     return toProspectDto(created)
   },
 
-  async update(id: number, patch: Record<string, unknown>, actor: { id: number; permissions: string[] }) {
+  async update(id: string, patch: Record<string, unknown>, actor: { id: string; permissions: string[] }) {
     const actorStaffId = actor.id
     await this.getOrThrow(id)
     const data: Prisma.ProspectUpdateInput = {}
@@ -90,7 +90,7 @@ export const prospectService = {
     if ('source' in patch) data.source = patch.source as string
     if ('owner_staff_id' in patch) {
       const canAssignOthers = actor.permissions.includes('*') || actor.permissions.includes('prospects.view_all')
-      const ownerStaffId = canAssignOthers ? (patch.owner_staff_id as number) : actorStaffId
+      const ownerStaffId = canAssignOthers ? (patch.owner_staff_id as string) : actorStaffId
       data.owner = { connect: { id: ownerStaffId } }
     }
 
@@ -99,7 +99,7 @@ export const prospectService = {
     return toProspectDto(updated)
   },
 
-  async setStage(id: number, stage: string, actorStaffId: number) {
+  async setStage(id: string, stage: string, actorStaffId: string) {
     const prospect = await this.getOrThrow(id)
     if (prospect.stage === 'converted') {
       throw new ConflictError('A converted prospect cannot change stage')
@@ -127,7 +127,7 @@ export const prospectService = {
    * prospect converted — all in a single MySQL transaction so a failure at
    * any step rolls back everything.
    */
-  async convert(id: number, tierId: number | undefined, actorStaffId: number) {
+  async convert(id: string, tierId: string | undefined, actorStaffId: string) {
     const prospect = await this.getOrThrow(id)
 
     if (prospect.stage === 'converted' || prospect.convertedDealerId) {
@@ -201,13 +201,13 @@ export const prospectService = {
     return { converted: true, dealer_id: result.dealer.id }
   },
 
-  async checklist(id: number) {
+  async checklist(id: string) {
     await this.getOrThrow(id)
     const items = await prospectRepository.onboardingItems(id)
     return items.map(toOnboardingItemDto)
   },
 
-  async setOnboardingItem(prospectId: number, itemId: number, status: string, actorStaffId: number) {
+  async setOnboardingItem(prospectId: string, itemId: string, status: string, actorStaffId: string) {
     await this.getOrThrow(prospectId)
     const item = await prisma.onboardingItem.findFirst({ where: { id: itemId, prospectId } })
     if (!item) throw new NotFoundError('Onboarding item')
@@ -223,13 +223,13 @@ export const prospectService = {
     return toOnboardingItemDto(updated)
   },
 
-  async visits(prospectId: number) {
+  async visits(prospectId: string) {
     await this.getOrThrow(prospectId)
     const visits = await prospectRepository.visits(prospectId)
     return visits.map(toVisitDto)
   },
 
-  async requests(prospectId: number) {
+  async requests(prospectId: string) {
     await this.getOrThrow(prospectId)
     const requests = await prospectRepository.requests(prospectId)
     return requests.map(toRequestDto)

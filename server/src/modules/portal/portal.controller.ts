@@ -66,27 +66,27 @@ export const portalController = {
   }),
 
   getRequest: asyncHandler(async (req: Request, res: Response) => {
-    const request = await requestRepository.findById(Number(req.params.id))
+    const request = await requestRepository.findById(req.params.id)
     if (!request || request.dealerId !== req.dealerAuth!.dealerId) throw new NotFoundError('Request')
     ok(res, toDealerRequestDto(request))
   }),
 
   getRequestTimeline: asyncHandler(async (req: Request, res: Response) => {
-    const request = await requestRepository.findById(Number(req.params.id))
+    const request = await requestRepository.findById(req.params.id)
     if (!request || request.dealerId !== req.dealerAuth!.dealerId) throw new NotFoundError('Request')
     const entries = await requestRepository.timeline(request.id)
     ok(res, toDealerTimelineEntries(entries))
   }),
 
   getRequestDetails: asyncHandler(async (req: Request, res: Response) => {
-    const request = await requestRepository.findById(Number(req.params.id))
+    const request = await requestRepository.findById(req.params.id)
     if (!request || request.dealerId !== req.dealerAuth!.dealerId) throw new NotFoundError('Request')
     const fields = await requestRepository.fields(request.id)
     ok(res, toRequestDetailsDto(request.id, fields))
   }),
 
   getRequestLines: asyncHandler(async (req: Request, res: Response) => {
-    const request = await requestRepository.findById(Number(req.params.id))
+    const request = await requestRepository.findById(req.params.id)
     if (!request || request.dealerId !== req.dealerAuth!.dealerId) throw new NotFoundError('Request')
     const lines = await requestRepository.lines(request.id)
     ok(res, lines.map(toRequestLineDto))
@@ -134,7 +134,7 @@ export const portalController = {
   }),
 
   getService: asyncHandler(async (req: Request, res: Response) => {
-    const service = await getService(Number(req.params.id))
+    const service = await getService(req.params.id)
     if (service.status !== 'active') throw new NotFoundError('Service')
     ok(res, service)
   }),
@@ -151,15 +151,15 @@ export const portalController = {
   }),
 
   getProvider: asyncHandler(async (req: Request, res: Response) => {
-    const provider = await getProvider(Number(req.params.id))
+    const provider = await getProvider(req.params.id)
     if (provider.status !== 'active') throw new NotFoundError('Provider')
     ok(res, provider)
   }),
 
   getProviderServices: asyncHandler(async (req: Request, res: Response) => {
-    const provider = await getProvider(Number(req.params.id))
+    const provider = await getProvider(req.params.id)
     if (provider.status !== 'active') throw new NotFoundError('Provider')
-    const services = await getProviderServices(Number(req.params.id))
+    const services = await getProviderServices(req.params.id)
     ok(res, services.filter((s) => s.status === 'active'))
   }),
 
@@ -174,7 +174,7 @@ export const portalController = {
   }),
 
   markNotificationRead: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const existing = await prisma.notification.findFirst({ where: { id, dealerId: req.dealerAuth!.dealerId } })
     if (!existing) throw new NotFoundError('Notification')
     const updated = await prisma.notification.update({ where: { id }, data: { isRead: true } })

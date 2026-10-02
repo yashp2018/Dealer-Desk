@@ -11,8 +11,8 @@ import { visitService } from '../visits/visit.service'
 import { createRequestSchema, noteSchema } from '../requests/request.validation'
 import { createVisitSchema, visitOutcomeSchema } from '../visits/visit.validation'
 
-const visitOutcomeMutationSchema = visitOutcomeSchema.extend({ visit_id: z.number().int().positive() })
-const requestNoteMutationSchema = noteSchema.extend({ request_id: z.number().int().positive() })
+const visitOutcomeMutationSchema = visitOutcomeSchema.extend({ visit_id: z.string().min(1) })
+const requestNoteMutationSchema = noteSchema.extend({ request_id: z.string().min(1) })
 
 const mutationSchema = z.object({
   client_uuid: z.string().uuid(),
@@ -42,7 +42,7 @@ syncRouter.post(
       }
 
       try {
-        let entityId: number | undefined
+        let entityId: string | undefined
         if (mutation.op_type === 'request.create') {
           const parsed = createRequestSchema.parse({ ...mutation.payload, client_uuid: mutation.client_uuid })
           const created = await requestService.create(parsed, req.staff!)

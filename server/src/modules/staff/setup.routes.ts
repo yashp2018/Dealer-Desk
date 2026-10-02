@@ -78,14 +78,14 @@ const staffCreateSchema = z.object({
   name: z.string().min(1).max(191),
   email: z.string().email(),
   password: z.string().min(8).max(72),
-  role_ids: z.array(z.coerce.number().int().positive()).min(1, 'At least one role is required'),
+  role_ids: z.array(z.string().min(1)).min(1, 'At least one role is required'),
 })
 
 const staffUpdateSchema = z.object({
   name: z.string().min(1).max(191).optional(),
   email: z.string().email().max(191).optional(),
   is_active: z.boolean().optional(),
-  role_ids: z.array(z.coerce.number().int().positive()).min(1, 'At least one role is required').optional(),
+  role_ids: z.array(z.string().min(1)).min(1, 'At least one role is required').optional(),
 })
 
 function toEscalationRuleDto(r: EscalationRule) {
@@ -115,7 +115,7 @@ const ACTION_TYPES = ['notify_owner', 'notify_role', 'reassign'] as const
 // but would leave a stored record inconsistent).
 function withTargetRefinement<T extends z.ZodRawShape>(schema: z.ZodObject<T>) {
   return schema
-    .refine((d) => (d as { action_type?: string }).action_type !== 'reassign' || !!(d as { action_target_staff_id?: number | null }).action_target_staff_id, {
+    .refine((d) => (d as { action_type?: string }).action_type !== 'reassign' || !!(d as { action_target_staff_id?: string | null }).action_target_staff_id, {
       message: 'action_target_staff_id is required when action_type is "reassign"',
       path: ['action_target_staff_id'],
     })
@@ -129,10 +129,10 @@ const escalationRuleBaseSchema = z.object({
   name: z.string().min(1).max(191),
   is_active: z.boolean().default(true),
   trigger_priority: z.coerce.number().int().min(1).max(4).nullable().optional(),
-  trigger_request_type_id: z.coerce.number().int().positive().nullable().optional(),
+  trigger_request_type_id: z.string().min(1).nullable().optional(),
   trigger_hours_overdue: z.coerce.number().int().min(0).max(8760), // one year — a rule that never fires within a year is a config mistake, not a real SLA
   action_type: z.enum(ACTION_TYPES),
-  action_target_staff_id: z.coerce.number().int().positive().nullable().optional(),
+  action_target_staff_id: z.string().min(1).nullable().optional(),
   action_target_role: z.string().min(1).max(191).nullable().optional(),
   escalation_message: z.string().min(1),
 })
@@ -176,7 +176,7 @@ setupRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const b = req.body as z.infer<typeof updateTierSchema>
     const tier = await prisma.tier.update({
-      where: { id: Number(req.params.id) },
+      where: { id: req.params.id },
       data: {
         ...(b.name !== undefined ? { name: b.name } : {}),
         ...(b.rank !== undefined ? { rank: b.rank } : {}),
@@ -213,7 +213,7 @@ setupRouter.patch(
   requirePermission('users.manage'),
   validate({ params: idParam, body: updateVisitTypeSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const existing = await prisma.visitType.findUnique({ where: { id } })
     if (!existing) throw new NotFoundError('Visit type')
 
@@ -231,7 +231,7 @@ setupRouter.delete(
   requirePermission('users.manage'),
   validate({ params: idParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const existing = await prisma.visitType.findUnique({ where: { id } })
     if (!existing) throw new NotFoundError('Visit type')
 
@@ -286,7 +286,7 @@ setupRouter.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const b = req.body as z.infer<typeof updateRequestTypeSchema>
     const type = await prisma.requestType.update({
-      where: { id: Number(req.params.id) },
+      where: { id: req.params.id },
       data: {
         ...(b.name !== undefined ? { name: b.name } : {}),
         ...(b.slug !== undefined ? { slug: b.slug } : {}),
@@ -316,7 +316,7 @@ setupRouter.get(
   '/escalation-rules/:id',
   validate({ params: idParam }),
   asyncHandler(async (req: Request, res: Response) => {
-    const rule = await prisma.escalationRule.findUnique({ where: { id: Number(req.params.id) } })
+    const rule = await prisma.escalationRule.findUnique({ where: { id: req.params.id } })
     if (!rule) throw new NotFoundError('Escalation rule')
     ok(res, toEscalationRuleDto(rule))
   }),
@@ -350,7 +350,7 @@ setupRouter.patch(
   requirePermission('users.manage'),
   validate({ params: idParam, body: updateEscalationRuleSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const existing = await prisma.escalationRule.findUnique({ where: { id } })
     if (!existing) throw new NotFoundError('Escalation rule')
 
@@ -440,7 +440,7 @@ setupRouter.patch(
   requirePermission('users.manage'),
   validate({ params: idParam, body: staffUpdateSchema }),
   asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const b = req.body as z.infer<typeof staffUpdateSchema>
     const existing = await prisma.staff.findUnique({ where: { id } })
     if (!existing) throw new NotFoundError('Employee')

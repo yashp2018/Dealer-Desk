@@ -8,8 +8,8 @@ export const visitRepository = {
     skip: number
     take: number
     status?: string
-    dealerId?: number
-    ownerStaffId?: number
+    dealerId?: string
+    ownerStaffId?: string
     startDate?: string
     endDate?: string
   }) {
@@ -33,7 +33,7 @@ export const visitRepository = {
     return { visits, total }
   },
 
-  findById(id: number) {
+  findById(id: string) {
     return prisma.visit.findUnique({ where: { id }, include: includeRelations })
   },
 
@@ -45,11 +45,11 @@ export const visitRepository = {
     return prisma.visit.create({ data, include: includeRelations })
   },
 
-  update(id: number, data: Prisma.VisitUpdateInput) {
+  update(id: string, data: Prisma.VisitUpdateInput) {
     return prisma.visit.update({ where: { id }, data, include: includeRelations })
   },
 
-  timeline(visitId: number) {
+  timeline(visitId: string) {
     return prisma.timelineEntry.findMany({
       where: { entityType: 'visit', entityId: visitId },
       include: { actor: true },
@@ -57,7 +57,7 @@ export const visitRepository = {
     })
   },
 
-  listAttachments(visitId: number) {
+  listAttachments(visitId: string) {
     return prisma.visitAttachment.findMany({
       where: { visitId },
       include: { uploadedBy: true },
@@ -65,7 +65,7 @@ export const visitRepository = {
     })
   },
 
-  findAttachment(visitId: number, attachmentId: number) {
+  findAttachment(visitId: string, attachmentId: string) {
     return prisma.visitAttachment.findFirst({ where: { id: attachmentId, visitId }, include: { uploadedBy: true } })
   },
 
@@ -73,7 +73,7 @@ export const visitRepository = {
     return prisma.visitAttachment.create({ data, include: { uploadedBy: true } })
   },
 
-  deleteAttachment(attachmentId: number) {
+  deleteAttachment(attachmentId: string) {
     return prisma.visitAttachment.delete({ where: { id: attachmentId } })
   },
 }

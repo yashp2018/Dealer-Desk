@@ -60,10 +60,11 @@ export default function Topbar({ title }: { title?: string }) {
 
   return (
     <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-4 gap-3 sticky top-0 z-30 shrink-0">
-      {/* Hamburger (mobile) */}
+      {/* Hamburger — visible below lg breakpoint */}
       <button
         onClick={toggleSidebar}
-        className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white lg:hidden"
+        className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white lg:hidden p-1"
+        aria-label="Toggle sidebar"
       >
         <Menu className="h-5 w-5" />
       </button>

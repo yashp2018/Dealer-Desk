@@ -1,15 +1,8 @@
-/**
- * src/api/providers.ts
- *
- * Frontend API client for the Providers module.
- * Consumes the Express /api/v1/providers endpoints.
- */
-
 import apiClient from './client'
 import type { ServiceItem } from './services'
 
 export interface Provider {
-  id: number
+  id: string
   providerCode: string
   name: string
   slug: string
@@ -45,11 +38,11 @@ export async function getProviders(params?: ProviderListParams): Promise<Provide
   return apiClient.get('/providers', { params })
 }
 
-export async function getProvider(id: number): Promise<Provider> {
+export async function getProvider(id: string): Promise<Provider> {
   return apiClient.get(`/providers/${id}`)
 }
 
-export async function getProviderServices(id: number): Promise<ServiceItem[]> {
+export async function getProviderServices(id: string): Promise<ServiceItem[]> {
   return apiClient.get(`/providers/${id}/services`)
 }
 
@@ -57,10 +50,10 @@ export async function createProvider(payload: Partial<CreateProviderPayload>): P
   return apiClient.post('/providers', payload)
 }
 
-export async function updateProvider(id: number, payload: Partial<Provider>): Promise<Provider> {
+export async function updateProvider(id: string, payload: Partial<Provider>): Promise<Provider> {
   return apiClient.patch(`/providers/${id}`, payload)
 }
 
-export async function deleteProvider(id: number): Promise<void> {
+export async function deleteProvider(id: string): Promise<void> {
   await apiClient.delete(`/providers/${id}`)
 }

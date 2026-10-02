@@ -5,28 +5,28 @@ export const authRepository = {
     return prisma.staff.findUnique({ where: { email } })
   },
 
-  findById(id: number) {
+  findById(id: string) {
     return prisma.staff.findUnique({ where: { id } })
   },
 
-  async incrementFailedLogins(staffId: number, lockedUntil: Date | null) {
+  async incrementFailedLogins(staffId: string, lockedUntil: Date | null) {
     await prisma.staff.update({
       where: { id: staffId },
       data: { failedLoginCount: { increment: 1 }, ...(lockedUntil ? { lockedUntil } : {}) },
     })
   },
 
-  async resetFailedLogins(staffId: number) {
+  async resetFailedLogins(staffId: string) {
     await prisma.staff.update({ where: { id: staffId }, data: { failedLoginCount: 0, lockedUntil: null } })
   },
 
-  async updatePassword(staffId: number, passwordHash: string) {
+  async updatePassword(staffId: string, passwordHash: string) {
     await prisma.staff.update({ where: { id: staffId }, data: { passwordHash } })
   },
 
   createRefreshToken(data: {
-    staffId?: number
-    dealerUserId?: number
+    staffId?: string
+    dealerUserId?: string
     tokenHash: string
     deviceId: string
     platform: string
@@ -43,18 +43,18 @@ export const authRepository = {
     })
   },
 
-  async revokeRefreshToken(id: number, replacedBy?: string) {
+  async revokeRefreshToken(id: string, replacedBy?: string) {
     await prisma.refreshToken.update({
       where: { id },
       data: { revokedAt: new Date(), ...(replacedBy ? { replacedBy } : {}) },
     })
   },
 
-  async revokeAllRefreshTokensForStaff(staffId: number) {
+  async revokeAllRefreshTokensForStaff(staffId: string) {
     await prisma.refreshToken.updateMany({ where: { staffId, revokedAt: null }, data: { revokedAt: new Date() } })
   },
 
-  async revokeAllRefreshTokensForDealerUser(dealerUserId: number) {
+  async revokeAllRefreshTokensForDealerUser(dealerUserId: string) {
     await prisma.refreshToken.updateMany({ where: { dealerUserId, revokedAt: null }, data: { revokedAt: new Date() } })
   },
 

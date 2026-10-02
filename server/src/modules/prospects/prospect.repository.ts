@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '../../config/database'
 
 export const prospectRepository = {
-  async findMany(params: { skip: number; take: number; q?: string; stage?: string; ownerStaffId?: number }) {
+  async findMany(params: { skip: number; take: number; q?: string; stage?: string; ownerStaffId?: string }) {
     const where: Prisma.ProspectWhereInput = {
       ...(params.q
         ? { OR: [{ companyName: { contains: params.q } }, { contactName: { contains: params.q } }, { email: { contains: params.q } }] }
@@ -17,7 +17,7 @@ export const prospectRepository = {
     return { prospects, total }
   },
 
-  findById(id: number) {
+  findById(id: string) {
     return prisma.prospect.findUnique({ where: { id } })
   },
 
@@ -25,19 +25,19 @@ export const prospectRepository = {
     return prisma.prospect.create({ data })
   },
 
-  update(id: number, data: Prisma.ProspectUpdateInput) {
+  update(id: string, data: Prisma.ProspectUpdateInput) {
     return prisma.prospect.update({ where: { id }, data })
   },
 
-  onboardingItems(prospectId: number) {
+  onboardingItems(prospectId: string) {
     return prisma.onboardingItem.findMany({ where: { prospectId } })
   },
 
-  visits(prospectId: number) {
+  visits(prospectId: string) {
     return prisma.visit.findMany({ where: { prospectId }, include: { visitType: true, owner: true, dealer: true, prospect: true }, orderBy: { scheduledAt: 'desc' } })
   },
 
-  requests(prospectId: number) {
+  requests(prospectId: string) {
     return prisma.request.findMany({ where: { prospectId }, include: { type: true, owner: true, dealer: true }, orderBy: { createdAt: 'desc' } })
   },
 }

@@ -33,7 +33,7 @@ export const providerController = {
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {
-    const provider = await getProvider(Number(req.params.id))
+    const provider = await getProvider(req.params.id)
     ok(res, provider)
   }),
 
@@ -43,17 +43,17 @@ export const providerController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const provider = await updateExistingProvider(Number(req.params.id), req.body, req.staff?.role ?? 'staff')
+    const provider = await updateExistingProvider(req.params.id, req.body, req.staff?.role ?? 'staff')
     ok(res, provider)
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    const result = await removeProvider(Number(req.params.id), req.staff?.role ?? 'staff')
+    const result = await removeProvider(req.params.id, req.staff?.role ?? 'staff')
     ok(res, result)
   }),
 
   services: asyncHandler(async (req: Request, res: Response) => {
-    const services = await getProviderServices(Number(req.params.id))
+    const services = await getProviderServices(req.params.id)
     ok(res, services)
   }),
 }

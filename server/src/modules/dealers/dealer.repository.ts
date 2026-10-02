@@ -3,7 +3,7 @@ import { prisma } from '../../config/database'
 
 const OPEN_STATUSES_NOT_IN = ['done', 'cancelled']
 
-async function withRequestCounts<T extends { id: number }>(dealers: T[]) {
+async function withRequestCounts<T extends { id: string }>(dealers: T[]) {
   if (dealers.length === 0) return []
   const ids = dealers.map((d) => d.id)
   const now = new Date()
@@ -36,9 +36,9 @@ export const dealerRepository = {
     skip: number
     take: number
     q?: string
-    territoryId?: number
-    tierId?: number
-    ownerStaffId?: number
+    territoryId?: string
+    tierId?: string
+    ownerStaffId?: string
     health?: string
   }) {
     const where: Prisma.DealerWhereInput = {
@@ -71,7 +71,7 @@ export const dealerRepository = {
     return { dealers: await withRequestCounts(dealers), total }
   },
 
-  async findById(id: number) {
+  async findById(id: string) {
     const dealer = await prisma.dealer.findUnique({ where: { id }, include: { tier: true, territory: true } })
     if (!dealer) return null
     const [withCounts] = await withRequestCounts([dealer])
@@ -86,18 +86,18 @@ export const dealerRepository = {
     return prisma.dealer.findFirst({ where: { name } })
   },
 
-  update(id: number, data: Prisma.DealerUpdateInput) {
+  update(id: string, data: Prisma.DealerUpdateInput) {
     return prisma.dealer.update({ where: { id }, data, include: { tier: true, territory: true } })
   },
 
-  contacts(dealerId: number) {
+  contacts(dealerId: string) {
     return prisma.dealerContact.findMany({
       where: { dealerId, isActive: true },
       orderBy: [{ isPrimary: 'desc' }, { name: 'asc' }],
     })
   },
 
-  async addContact(dealerId: number, data: { name: string; roleLabel?: string; phone?: string; email?: string; isPrimary?: boolean }) {
+  async addContact(dealerId: string, data: { name: string; roleLabel?: string; phone?: string; email?: string; isPrimary?: boolean }) {
     if (data.isPrimary) {
       await prisma.dealerContact.updateMany({ where: { dealerId, isPrimary: true }, data: { isPrimary: false } })
     }
@@ -113,11 +113,11 @@ export const dealerRepository = {
     })
   },
 
-  deactivateContact(dealerId: number, contactId: number) {
+  deactivateContact(dealerId: string, contactId: string) {
     return prisma.dealerContact.updateMany({ where: { id: contactId, dealerId }, data: { isActive: false } })
   },
 
-  requests(dealerId: number) {
+  requests(dealerId: string) {
     return prisma.request.findMany({
       where: { dealerId },
       include: { type: true, owner: true, dealer: true },
@@ -125,7 +125,7 @@ export const dealerRepository = {
     })
   },
 
-  visits(dealerId: number) {
+  visits(dealerId: string) {
     return prisma.visit.findMany({
       where: { dealerId },
       include: { visitType: true, owner: true, dealer: true, prospect: true },
@@ -133,7 +133,7 @@ export const dealerRepository = {
     })
   },
 
-  timeline(dealerId: number) {
+  timeline(dealerId: string) {
     return prisma.timelineEntry.findMany({
       where: { entityType: 'dealer', entityId: dealerId },
       include: { actor: true },
@@ -164,11 +164,11 @@ export const dealerRepository = {
     })
   },
 
-  findCandidateById(id: number) {
+  findCandidateById(id: string) {
     return prisma.dealerImportCandidate.findUnique({ where: { id } })
   },
 
-  markCandidateUsed(id: number, dealerId: number) {
+  markCandidateUsed(id: string, dealerId: string) {
     return prisma.dealerImportCandidate.update({
       where: { id },
       data: { status: 'used', usedDealerId: dealerId, usedAt: new Date() },

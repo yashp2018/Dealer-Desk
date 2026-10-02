@@ -13,7 +13,7 @@ export const calendarController = {
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {
-    const activity = await calendarService.getOne(Number(req.params.id), req.staff!)
+    const activity = await calendarService.getOne(req.params.id, req.staff!)
     ok(res, activity)
   }),
 
@@ -23,27 +23,27 @@ export const calendarController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const activity = await calendarService.update(Number(req.params.id), req.body, req.staff!)
+    const activity = await calendarService.update(req.params.id, req.body, req.staff!)
     ok(res, activity)
   }),
 
   move: asyncHandler(async (req: Request, res: Response) => {
-    const activity = await calendarService.move(Number(req.params.id), req.body.start_at, req.body.end_at, req.staff!)
+    const activity = await calendarService.move(req.params.id, req.body.start_at, req.body.end_at, req.staff!)
     ok(res, activity)
   }),
 
   resize: asyncHandler(async (req: Request, res: Response) => {
-    const activity = await calendarService.resize(Number(req.params.id), req.body.end_at, req.staff!)
+    const activity = await calendarService.resize(req.params.id, req.body.end_at, req.staff!)
     ok(res, activity)
   }),
 
   complete: asyncHandler(async (req: Request, res: Response) => {
-    const activity = await calendarService.complete(Number(req.params.id), req.staff!)
+    const activity = await calendarService.complete(req.params.id, req.staff!)
     ok(res, activity)
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await calendarService.remove(Number(req.params.id), req.staff!)
+    await calendarService.remove(req.params.id, req.staff!)
     noContent(res)
   }),
 }

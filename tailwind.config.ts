@@ -5,7 +5,7 @@ export default {
   darkMode: 'class',
   theme: {
     extend: {
-      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      fontFamily: { sans: ['DM Sans', 'system-ui', 'sans-serif'] },
       colors: {
         brand: {
           50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe',

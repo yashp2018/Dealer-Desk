@@ -11,13 +11,13 @@ export const UPLOAD_ROOT = path.resolve(process.cwd(), env.UPLOAD_DIR)
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic'])
 
 /** Visit photo attachments live under <UPLOAD_DIR>/visits/<visitId>/. */
-export function visitAttachmentDir(visitId: number): string {
+export function visitAttachmentDir(visitId: string): string {
   return path.join(UPLOAD_ROOT, 'visits', String(visitId))
 }
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
-    const dir = visitAttachmentDir(Number(req.params.id))
+    const dir = visitAttachmentDir(req.params.id)
     fs.mkdirSync(dir, { recursive: true })
     cb(null, dir)
   },

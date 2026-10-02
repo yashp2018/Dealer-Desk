@@ -18,8 +18,8 @@ interface UploadedFile {
 
 export const visitService = {
   async list(
-    params: { skip: number; take: number; status?: string; dealerId?: number; ownerStaffId?: number; startDate?: string; endDate?: string },
-    actor: { id: number; permissions: string[] },
+    params: { skip: number; take: number; status?: string; dealerId?: string; ownerStaffId?: string; startDate?: string; endDate?: string },
+    actor: { id: string; permissions: string[] },
   ) {
     const canViewAll = actor.permissions.includes('*') || actor.permissions.includes('visits.view_all')
     // A view_own-only staff member can never widen their own results by
@@ -30,18 +30,18 @@ export const visitService = {
     return { visits: visits.map(toVisitDto), total }
   },
 
-  async getOrThrow(id: number) {
+  async getOrThrow(id: string) {
     const visit = await visitRepository.findById(id)
     if (!visit) throw new NotFoundError('Visit')
     return visit
   },
 
-  async timeline(id: number) {
+  async timeline(id: string) {
     await this.getOrThrow(id)
     return visitRepository.timeline(id)
   },
 
-  async create(input: CreateVisitInput, actor: { id: number; permissions: string[] }) {
+  async create(input: CreateVisitInput, actor: { id: string; permissions: string[] }) {
     const actorStaffId = actor.id
     if (input.client_uuid) {
       const existing = await visitRepository.findByClientUuid(input.client_uuid)
@@ -89,7 +89,7 @@ export const visitService = {
     return toVisitDto(created)
   },
 
-  async start(id: number, actorStaffId: number) {
+  async start(id: string, actorStaffId: string) {
     const visit = await this.getOrThrow(id)
     if (visit.status !== 'scheduled') {
       throw new ConflictError(`Visit is "${visit.status}" and cannot be started`)
@@ -107,9 +107,9 @@ export const visitService = {
   },
 
   async submitOutcome(
-    id: number,
+    id: string,
     data: { outcome: string; outcome_note?: string; next_step?: string; next_at?: string },
-    actorStaffId: number,
+    actorStaffId: string,
   ) {
     const visit = await this.getOrThrow(id)
     if (visit.status === 'done' || visit.status === 'cancelled') {
@@ -156,7 +156,7 @@ export const visitService = {
     return toVisitDto(updated)
   },
 
-  async cancel(id: number, actorStaffId: number) {
+  async cancel(id: string, actorStaffId: string) {
     const visit = await this.getOrThrow(id)
     if (visit.status === 'done' || visit.status === 'cancelled') {
       throw new ConflictError(`Visit is already "${visit.status}" and cannot be cancelled`)
@@ -175,32 +175,32 @@ export const visitService = {
     return toVisitDto(updated)
   },
 
-  async addNote(id: number, body: string, actorStaffId: number) {
+  async addNote(id: string, body: string, actorStaffId: string) {
     await this.getOrThrow(id)
     await recordTimelineEvent({ entityType: 'visit', entityId: id, eventType: 'note', summary: body, actorStaffId })
     const entries = await visitRepository.timeline(id)
     return entries[0] ?? null
   },
 
-  async getAgenda(id: number) {
+  async getAgenda(id: string) {
     const visit = await this.getOrThrow(id)
     return (visit.agendaJson as VisitAgendaInput['items'] | null) ?? []
   },
 
-  async updateAgenda(id: number, items: VisitAgendaInput['items'], actorStaffId: number) {
+  async updateAgenda(id: string, items: VisitAgendaInput['items'], actorStaffId: string) {
     await this.getOrThrow(id)
     const updated = await prisma.visit.update({ where: { id }, data: { agendaJson: items } })
     await recordTimelineEvent({ entityType: 'visit', entityId: id, eventType: 'agenda_updated', summary: 'Visit agenda updated', actorStaffId })
     return (updated.agendaJson as VisitAgendaInput['items'] | null) ?? []
   },
 
-  async listAttachments(id: number) {
+  async listAttachments(id: string) {
     await this.getOrThrow(id)
     const attachments = await visitRepository.listAttachments(id)
     return attachments.map(toVisitAttachmentDto)
   },
 
-  async addAttachment(id: number, file: UploadedFile, actorStaffId: number) {
+  async addAttachment(id: string, file: UploadedFile, actorStaffId: string) {
     await this.getOrThrow(id)
     const attachment = await visitRepository.createAttachment({
       visitId: id,
@@ -214,14 +214,14 @@ export const visitService = {
     return toVisitAttachmentDto(attachment)
   },
 
-  async getAttachmentFile(id: number, attachmentId: number) {
+  async getAttachmentFile(id: string, attachmentId: string) {
     await this.getOrThrow(id)
     const attachment = await visitRepository.findAttachment(id, attachmentId)
     if (!attachment) throw new NotFoundError('Attachment')
     return { ...attachment, filePath: path.join(visitAttachmentDir(id), attachment.storedName) }
   },
 
-  async removeAttachment(id: number, attachmentId: number, actorStaffId: number) {
+  async removeAttachment(id: string, attachmentId: string, actorStaffId: string) {
     await this.getOrThrow(id)
     const attachment = await visitRepository.findAttachment(id, attachmentId)
     if (!attachment) throw new NotFoundError('Attachment')

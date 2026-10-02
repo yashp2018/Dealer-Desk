@@ -1,12 +1,15 @@
 import { z } from 'zod'
 
+// MongoDB ObjectId: exactly 24 hex characters.
+export const objectIdString = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Must be a valid id')
+
 export const idParam = z.object({
-  id: z.coerce.number().int().positive(),
+  id: objectIdString,
 })
 
 export const nestedIdParams = z.object({
-  id: z.coerce.number().int().positive(),
-  itemId: z.coerce.number().int().positive(),
+  id: objectIdString,
+  itemId: objectIdString,
 })
 
 export const paginationQuery = z.object({

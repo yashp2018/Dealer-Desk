@@ -1,6 +1,6 @@
 import { prisma } from '../../config/database'
 
-export async function getStaffPermissions(staffId: number): Promise<string[]> {
+export async function getStaffPermissions(staffId: string): Promise<string[]> {
   const staffRoles = await prisma.staffRole.findMany({
     where: { staffId },
     include: { role: { include: { permissions: { include: { permission: true } } } } },
@@ -15,7 +15,7 @@ export async function getStaffPermissions(staffId: number): Promise<string[]> {
   return Array.from(permissionKeys)
 }
 
-export async function hasAdminRole(staffId: number): Promise<boolean> {
+export async function hasAdminRole(staffId: string): Promise<boolean> {
   const adminRole = await prisma.staffRole.findFirst({
     where: { staffId, role: { key: 'admin' } },
   })

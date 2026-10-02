@@ -12,8 +12,8 @@ import { parseDealerImportFile } from './dealerImport.parser'
 
 export const dealerService = {
   async list(
-    params: { skip: number; take: number; q?: string; territoryId?: number; tierId?: number; ownerStaffId?: number; health?: string },
-    actor: { id: number; permissions: string[] },
+    params: { skip: number; take: number; q?: string; territoryId?: string; tierId?: string; ownerStaffId?: string; health?: string },
+    actor: { id: string; permissions: string[] },
   ) {
     const canViewAll = actor.permissions.includes('*') || actor.permissions.includes('dealers.view_all')
     // A view_own-only staff member can never widen their own results by
@@ -24,7 +24,7 @@ export const dealerService = {
     return { dealers: dealers.map(toDealerDto), total }
   },
 
-  async getOrThrow(id: number) {
+  async getOrThrow(id: string) {
     const dealer = await dealerRepository.findById(id)
     if (!dealer) throw new NotFoundError('Dealer')
     return dealer
@@ -36,7 +36,7 @@ export const dealerService = {
    * also add one directly (e.g. a long-standing dealer with no prospect
    * history to onboard through).
    */
-  async create(input: CreateDealerInput, actor: { id: number; permissions: string[] }) {
+  async create(input: CreateDealerInput, actor: { id: string; permissions: string[] }) {
     const duplicate = await dealerRepository.findByName(input.name)
     if (duplicate) throw new ConflictError(`A dealer named "${duplicate.name}" already exists — possible duplicate`)
 
@@ -85,7 +85,7 @@ export const dealerService = {
    * stages the valid, non-duplicate rows as pending import candidates, and
    * reports what happened to the rest — never silently drops a row.
    */
-  async importCandidates(file: { buffer: Buffer; originalname: string }, actorStaffId: number) {
+  async importCandidates(file: { buffer: Buffer; originalname: string }, actorStaffId: string) {
     const parsed = parseDealerImportFile(file.buffer)
 
     const [existingDealers, existingCandidates] = await Promise.all([
@@ -131,7 +131,7 @@ export const dealerService = {
     return candidates.map(toImportCandidateDto)
   },
 
-  async update(id: number, patch: Record<string, unknown>, actorStaffId: number) {
+  async update(id: string, patch: Record<string, unknown>, actorStaffId: string) {
     await this.getOrThrow(id)
     const data: Prisma.DealerUpdateInput = {}
     if ('display_name' in patch) data.displayName = patch.display_name as string
@@ -139,11 +139,11 @@ export const dealerService = {
     if ('whatsapp_phone' in patch) data.whatsappPhone = patch.whatsapp_phone as string
     if ('city' in patch) data.city = patch.city as string
     if ('state_normalized' in patch) data.stateNormalized = patch.state_normalized as string
-    if ('tier_id' in patch && patch.tier_id) data.tier = { connect: { id: patch.tier_id as number } }
-    if ('territory_id' in patch && patch.territory_id) data.territory = { connect: { id: patch.territory_id as number } }
+    if ('tier_id' in patch && patch.tier_id) data.tier = { connect: { id: patch.tier_id as string } }
+    if ('territory_id' in patch && patch.territory_id) data.territory = { connect: { id: patch.territory_id as string } }
     if ('territory_is_manual' in patch) data.territoryIsManual = patch.territory_is_manual as boolean
     if ('owner_staff_id' in patch) {
-      data.owner = patch.owner_staff_id ? { connect: { id: patch.owner_staff_id as number } } : { disconnect: true }
+      data.owner = patch.owner_staff_id ? { connect: { id: patch.owner_staff_id as string } } : { disconnect: true }
     }
 
     await dealerRepository.update(id, data)
@@ -152,13 +152,13 @@ export const dealerService = {
     return toDealerDto(full)
   },
 
-  async contacts(dealerId: number) {
+  async contacts(dealerId: string) {
     await this.getOrThrow(dealerId)
     const contacts = await dealerRepository.contacts(dealerId)
     return contacts.map(toDealerContactDto)
   },
 
-  async addContact(dealerId: number, data: { name: string; role_label?: string; phone?: string; email?: string; is_primary?: boolean }, actorStaffId: number) {
+  async addContact(dealerId: string, data: { name: string; role_label?: string; phone?: string; email?: string; is_primary?: boolean }, actorStaffId: string) {
     await this.getOrThrow(dealerId)
     const contact = await dealerRepository.addContact(dealerId, {
       name: data.name,
@@ -171,25 +171,25 @@ export const dealerService = {
     return toDealerContactDto(contact)
   },
 
-  async requests(dealerId: number) {
+  async requests(dealerId: string) {
     await this.getOrThrow(dealerId)
     const requests = await dealerRepository.requests(dealerId)
     return requests.map(toRequestDto)
   },
 
-  async visits(dealerId: number) {
+  async visits(dealerId: string) {
     await this.getOrThrow(dealerId)
     const visits = await dealerRepository.visits(dealerId)
     return visits.map(toVisitDto)
   },
 
-  async timeline(dealerId: number) {
+  async timeline(dealerId: string) {
     await this.getOrThrow(dealerId)
     const entries = await dealerRepository.timeline(dealerId)
     return entries.map(toTimelineDto)
   },
 
-  async threeSixty(dealerId: number) {
+  async threeSixty(dealerId: string) {
     const dealer = await this.getOrThrow(dealerId)
     const [contacts, requests, visits, timeline] = await Promise.all([
       dealerRepository.contacts(dealerId),
@@ -207,7 +207,7 @@ export const dealerService = {
   },
 
   /** Dealer portal: get own dealer (safe fields only). */
-  async getOwnDealer(dealerId: number) {
+  async getOwnDealer(dealerId: string) {
     const dealer = await dealerRepository.findById(dealerId)
     if (!dealer) throw new NotFoundError('Dealer')
     return toDealerPortalDto(dealer)
@@ -218,7 +218,7 @@ export const dealerService = {
    * territory, owner, code and health are staff-controlled and never
    * reach this method at all (not just filtered from the request body).
    */
-  async updateOwnProfile(dealerId: number, patch: { display_name?: string; phone_primary?: string; whatsapp_phone?: string; city?: string; state_normalized?: string }) {
+  async updateOwnProfile(dealerId: string, patch: { display_name?: string; phone_primary?: string; whatsapp_phone?: string; city?: string; state_normalized?: string }) {
     await this.getOrThrow(dealerId)
     const data: Prisma.DealerUpdateInput = {}
     if (patch.display_name !== undefined) data.displayName = patch.display_name

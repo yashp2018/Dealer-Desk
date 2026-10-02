@@ -1,24 +1,24 @@
 import { z } from 'zod'
-import { isoDateTime } from '../../common/validators/common'
+import { isoDateTime, objectIdString } from '../../common/validators/common'
 
 export const listVisitsQuery = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().max(200).optional(),
   status: z.string().optional(),
-  dealer_id: z.coerce.number().int().positive().optional(),
-  owner_staff_id: z.coerce.number().int().positive().optional(),
+  dealer_id: objectIdString.optional(),
+  owner_staff_id: objectIdString.optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
 })
 
 export const createVisitSchema = z
   .object({
-    dealer_id: z.number().int().positive().optional(),
-    prospect_id: z.number().int().positive().optional(),
-    visit_type_id: z.number().int().positive(),
+    dealer_id: objectIdString.optional(),
+    prospect_id: objectIdString.optional(),
+    visit_type_id: objectIdString,
     scheduled_at: isoDateTime,
     title: z.string().optional(),
-    owner_staff_id: z.number().int().positive().optional(),
+    owner_staff_id: objectIdString.optional(),
     client_uuid: z.string().uuid().optional(),
   })
   .refine((v) => v.dealer_id || v.prospect_id, { message: 'Either dealer_id or prospect_id is required' })

@@ -4,8 +4,8 @@ import { UnauthorizedError } from '../errors/AppError'
 import { prisma } from '../../config/database'
 
 export interface AuthenticatedDealer {
-  id: number // DealerUser id
-  dealerId: number // Dealer id — the only value every portal query is scoped by
+  id: string // DealerUser id
+  dealerId: string // Dealer id — the only value every portal query is scoped by
   name: string
   email: string
 }
@@ -43,7 +43,7 @@ export async function requireDealerAuth(req: Request, _res: Response, next: Next
       throw new UnauthorizedError('Dealer access only')
     }
 
-    const dealerUserId = Number(payload.sub)
+    const dealerUserId = payload.sub
     const dealerUser = await prisma.dealerUser.findUnique({
       where: { id: dealerUserId },
       select: { id: true, name: true, email: true, isActive: true, dealerId: true },

@@ -5,7 +5,7 @@ import { asyncHandler } from '../../common/utils/asyncHandler'
 import { ok } from '../../common/utils/response'
 import { NotFoundError } from '../../common/errors/AppError'
 
-function toNotificationDto(n: { id: number; title: string; body: string; message: string; linkUrl: string | null; isRead: boolean; createdAt: Date }) {
+function toNotificationDto(n: { id: string; title: string; body: string; message: string; linkUrl: string | null; isRead: boolean; createdAt: Date }) {
   return {
     id: n.id,
     title: n.title,
@@ -43,7 +43,7 @@ notificationRouter.get(
 notificationRouter.post(
   '/:id/read',
   asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const existing = await prisma.notification.findFirst({ where: { id, staffId: req.staff!.id } })
     if (!existing) throw new NotFoundError('Notification')
     const updated = await prisma.notification.update({ where: { id }, data: { isRead: true } })
@@ -71,7 +71,7 @@ notificationRouter.patch(
 notificationRouter.patch(
   '/:id/read',
   asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const existing = await prisma.notification.findFirst({ where: { id, staffId: req.staff!.id } })
     if (!existing) throw new NotFoundError('Notification')
     const updated = await prisma.notification.update({ where: { id }, data: { isRead: true } })

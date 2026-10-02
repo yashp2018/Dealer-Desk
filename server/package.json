@@ -2,10 +2,9 @@
   "name": "dealer-desk-server",
   "version": "1.0.0",
   "private": true,
-  "description": "Production backend for Dealer Desk — Express + TypeScript + MySQL (Prisma).",
+  "description": "Production backend for Dealer Desk — Express + TypeScript + MongoDB (Prisma).",
   "main": "dist/server.js",
   "scripts": {
-    "predev": "node -e \"if(process.platform==='win32'){require('child_process').execSync('powershell -ExecutionPolicy Bypass -File scripts/start-mysql.ps1', {stdio:'inherit'})}\"",
     "dev": "tsx watch src/server.ts",
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",

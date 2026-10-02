@@ -18,7 +18,7 @@ import {
   updateDealerSchema,
 } from './dealer.validation'
 
-function assertOwnedAccess(req: Request, ownerStaffId: number | null) {
+function assertOwnedAccess(req: Request, ownerStaffId: string | null) {
   if (!canAccessOwned(req, 'dealers', ownerStaffId)) {
     throw new ForbiddenError('You do not have access to this dealer')
   }
@@ -36,9 +36,9 @@ const dealerController = {
         skip,
         take: limit,
         q: q.q as string | undefined,
-        territoryId: q.territory_id ? Number(q.territory_id) : undefined,
-        tierId: q.tier_id ? Number(q.tier_id) : undefined,
-        ownerStaffId: q.owner_staff_id ? Number(q.owner_staff_id) : undefined,
+        territoryId: q.territory_id as string | undefined,
+        tierId: q.tier_id as string | undefined,
+        ownerStaffId: q.owner_staff_id as string | undefined,
         health: q.health as string | undefined,
       },
       req.staff!,
@@ -47,13 +47,13 @@ const dealerController = {
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {
-    const dealer = await dealerService.getOrThrow(Number(req.params.id))
+    const dealer = await dealerService.getOrThrow(req.params.id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     ok(res, toDealerDto(dealer))
   }),
 
   threeSixty: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const dealer = await dealerService.getOrThrow(id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     ok(res, await dealerService.threeSixty(id))
@@ -76,19 +76,19 @@ const dealerController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const result = await dealerService.update(Number(req.params.id), req.body, req.staff!.id)
+    const result = await dealerService.update(req.params.id, req.body, req.staff!.id)
     ok(res, result)
   }),
 
   contacts: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const dealer = await dealerService.getOrThrow(id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     ok(res, await dealerService.contacts(id))
   }),
 
   addContact: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const dealer = await dealerService.getOrThrow(id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     const contact = await dealerService.addContact(id, req.body, req.staff!.id)
@@ -96,21 +96,21 @@ const dealerController = {
   }),
 
   requests: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const dealer = await dealerService.getOrThrow(id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     ok(res, await dealerService.requests(id))
   }),
 
   visits: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const dealer = await dealerService.getOrThrow(id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     ok(res, await dealerService.visits(id))
   }),
 
   timeline: asyncHandler(async (req: Request, res: Response) => {
-    const id = Number(req.params.id)
+    const id = req.params.id
     const dealer = await dealerService.getOrThrow(id)
     assertOwnedAccess(req, dealer.ownerStaffId)
     ok(res, await dealerService.timeline(id))

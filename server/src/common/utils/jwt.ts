@@ -23,23 +23,23 @@ export interface DealerAccessTokenPayload extends JwtPayload {
 
 export type AccessTokenPayload = StaffAccessTokenPayload | DealerAccessTokenPayload
 
-function sign(sub: number, payload: Record<string, unknown>): { token: string; expiresIn: number } {
+function sign(sub: string, payload: Record<string, unknown>): { token: string; expiresIn: number } {
   const options: SignOptions = { expiresIn: env.JWT_ACCESS_EXPIRES_IN as SignOptions['expiresIn'] }
-  const token = jwt.sign({ sub: String(sub), ...payload }, env.JWT_ACCESS_SECRET, options)
+  const token = jwt.sign({ sub, ...payload }, env.JWT_ACCESS_SECRET, options)
   const decoded = jwt.decode(token) as JwtPayload
   const expiresIn = decoded.exp && decoded.iat ? decoded.exp - decoded.iat : 0
   return { token, expiresIn }
 }
 
 export function signStaffAccessToken(
-  staffId: number,
+  staffId: string,
   permissions: string[],
   role: string,
 ): { token: string; expiresIn: number } {
   return sign(staffId, { type: 'staff', permissions, role })
 }
 
-export function signDealerAccessToken(dealerUserId: number): { token: string; expiresIn: number } {
+export function signDealerAccessToken(dealerUserId: string): { token: string; expiresIn: number } {
   return sign(dealerUserId, { type: 'dealer' })
 }
 

@@ -33,7 +33,7 @@ export const serviceController = {
   }),
 
   get: asyncHandler(async (req: Request, res: Response) => {
-    const service = await getService(Number(req.params.id))
+    const service = await getService(req.params.id)
     ok(res, service)
   }),
 
@@ -43,17 +43,17 @@ export const serviceController = {
   }),
 
   update: asyncHandler(async (req: Request, res: Response) => {
-    const service = await updateExistingService(Number(req.params.id), req.body, req.staff?.role ?? 'staff')
+    const service = await updateExistingService(req.params.id, req.body, req.staff?.role ?? 'staff')
     ok(res, service)
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    const result = await archiveService(Number(req.params.id), req.staff?.role ?? 'staff')
+    const result = await archiveService(req.params.id, req.staff?.role ?? 'staff')
     ok(res, result)
   }),
 
   byProvider: asyncHandler(async (req: Request, res: Response) => {
-    const services = await getServicesByProvider(Number(req.params.providerId))
+    const services = await getServicesByProvider(req.params.providerId)
     ok(res, services)
   }),
 }
